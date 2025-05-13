@@ -1,0 +1,29 @@
+'use client';
+
+import type { FC } from 'react';
+import ImageCard from './image-card';
+import type { GeneratedImage } from '@/app/actions';
+
+interface ImageGalleryProps {
+  images: GeneratedImage[];
+}
+
+const ImageGallery: FC<ImageGalleryProps> = ({ images }) => {
+  if (images.length === 0) {
+    return (
+      <div className="text-center py-10 text-muted-foreground">
+        <p>No images generated yet. Try creating one!</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 p-4">
+      {images.map((image) => (
+        <ImageCard key={image.id} image={image} />
+      ))}
+    </div>
+  );
+};
+
+export default ImageGallery;

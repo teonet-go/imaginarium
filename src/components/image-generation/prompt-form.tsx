@@ -1,0 +1,92 @@
+'use client';
+
+import type { FC } from 'react';
+import { ImageIcon, Wand2, Loader2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+
+interface PromptFormProps {
+  prompt: string;
+  onPromptChange: (prompt: string) => void;
+  onGenerate: () => Promise<void>;
+  onRefine: () => Promise<void>;
+  isGenerating: boolean;
+  isRefining: boolean;
+}
+
+const PromptForm: FC<PromptFormProps> = ({
+  prompt,
+  onPromptChange,
+  onGenerate,
+  onRefine,
+  isGenerating,
+  isRefining,
+}) => {
+  const handleSubmitGenerate = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (prompt.trim()) {
+      onGenerate();
+    }
+  };
+
+  const handleSubmitRefine = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (prompt.trim()) {
+      onRefine();
+    }
+  };
+  
+  const canSubmit = prompt.trim().length > 0;
+
+  return (
+    <Card className="shadow-lg">
+      <CardHeader>
+        <CardTitle className="text-xl">Create Your Image</CardTitle>
+      </CardHeader>
+      <form>
+        <CardContent>
+          <Textarea
+            placeholder="Enter your image prompt, e.g., 'A futuristic cityscape at sunset'"
+            value={prompt}
+            onChange={(e) => onPromptChange(e.target.value)}
+            rows={4}
+            className="resize-none focus:ring-primary focus:border-primary"
+            aria-label="Image generation prompt"
+          />
+        </CardContent>
+        <CardFooter className="flex flex-col sm:flex-row justify-between gap-3">
+          <Button
+            type="button"
+            onClick={handleSubmitRefine}
+            variant="outline"
+            disabled={isRefining || isGenerating || !canSubmit}
+            className="w-full sm:w-auto"
+          >
+            {isRefining ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Wand2 className="mr-2 h-4 w-4" />
+            )}
+            Refine Prompt
+          </Button>
+          <Button
+            type="submit"
+            onClick={handleSubmitGenerate}
+            disabled={isGenerating || isRefining || !canSubmit}
+            className="w-full sm:w-auto bg-primary hover:bg-primary/90 text-primary-foreground"
+          >
+            {isGenerating ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <ImageIcon className="mr-2 h-4 w-4" />
+            )}
+            Generate Image
+          </Button>
+        </CardFooter>
+      </form>
+    </Card>
+  );
+};
+
+export default PromptForm;
