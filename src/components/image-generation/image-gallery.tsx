@@ -1,3 +1,4 @@
+// src/components/image-generation/image-gallery.tsx
 'use client';
 
 import type { FC } from 'react';
@@ -7,9 +8,10 @@ import type { GeneratedImage } from '@/app/actions';
 interface ImageGalleryProps {
   images: GeneratedImage[];
   onDeleteImage: (id: string) => void;
+  onStartRefineImage: (image: GeneratedImage) => void;
 }
 
-const ImageGallery: FC<ImageGalleryProps> = ({ images, onDeleteImage }) => {
+const ImageGallery: FC<ImageGalleryProps> = ({ images, onDeleteImage, onStartRefineImage }) => {
   if (images.length === 0) {
     return (
       <div className="text-center py-10 text-muted-foreground">
@@ -19,9 +21,14 @@ const ImageGallery: FC<ImageGalleryProps> = ({ images, onDeleteImage }) => {
   }
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 p-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6 p-4">
       {images.map((image) => (
-        <ImageCard key={image.id} image={image} onDelete={onDeleteImage} />
+        <ImageCard 
+          key={image.id} 
+          image={image} 
+          onDelete={onDeleteImage} 
+          onStartRefine={onStartRefineImage} 
+        />
       ))}
     </div>
   );
