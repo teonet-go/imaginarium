@@ -2,16 +2,17 @@
 
 import type { FC } from 'react';
 import Image from 'next/image';
-import { Download } from 'lucide-react';
+import { Download, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import type { GeneratedImage } from '@/app/actions';
 
 interface ImageCardProps {
   image: GeneratedImage;
+  onDelete: (id: string) => void;
 }
 
-const ImageCard: FC<ImageCardProps> = ({ image }) => {
+const ImageCard: FC<ImageCardProps> = ({ image, onDelete }) => {
   const handleDownload = async () => {
     try {
       const response = await fetch(image.url);
@@ -31,6 +32,10 @@ const ImageCard: FC<ImageCardProps> = ({ image }) => {
     }
   };
 
+  const handleDelete = () => {
+    onDelete(image.id);
+  };
+
   return (
     <Card className="overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300 flex flex-col">
       <CardHeader>
@@ -48,10 +53,14 @@ const ImageCard: FC<ImageCardProps> = ({ image }) => {
           data-ai-hint={image.aiHint || 'abstract art'}
         />
       </CardContent>
-      <CardFooter className="p-4 mt-auto">
-        <Button onClick={handleDownload} variant="outline" size="sm" className="w-full">
+      <CardFooter className="p-4 mt-auto flex space-x-2">
+        <Button onClick={handleDownload} variant="outline" size="sm" className="flex-1">
           <Download className="mr-2 h-4 w-4" />
           Download
+        </Button>
+        <Button onClick={handleDelete} variant="destructive" size="sm" className="flex-1">
+          <Trash2 className="mr-2 h-4 w-4" />
+          Delete
         </Button>
       </CardFooter>
     </Card>

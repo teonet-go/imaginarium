@@ -1,3 +1,4 @@
+// src/app/page.tsx
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -38,31 +39,27 @@ export default function ImaginariumPage() {
 
   // Save images to local storage whenever they change, respecting the limit
   useEffect(() => {
-    const imagesToPersist = generatedImages.slice(0, MAX_STORED_IMAGES);
-
+    // Ensure we only attempt to slice if generatedImages is an array.
+    // This guards against potential intermediate states or errors.
+    const imagesToPersist = Array.isArray(generatedImages)
+      ? generatedImages.slice(0, MAX_STORED_IMAGES)
+      : [];
+  
     try {
       localStorage.setItem('generatedImages', JSON.stringify(imagesToPersist));
     } catch (error) {
       console.error("Error saving images to local storage:", error);
-      // Check for QuotaExceededError (name or code, message check as fallback)
       if (error instanceof DOMException && (error.name === 'QuotaExceededError' || error.code === 22 || (error.message && error.message.toLowerCase().includes('quota')))) {
         toast({
           title: "Local Storage Full",
           description: "Could not save all recent images as local storage is full. Trying to save just the latest.",
           variant: "destructive",
         });
-        // Attempt to save only the very latest image as a fallback
         try {
-          if (generatedImages.length > 0) {
-            localStorage.setItem('generatedImages', JSON.stringify([generatedImages[0]]));
-            // Avoid rapid toasts; the primary error toast is enough indication.
-            // Optionally, add a success toast if this fallback works and user needs to know.
-            // toast({
-            //   title: "Saved Latest Image",
-            //   description: "Successfully saved only the most recent image due to storage limits.",
-            // });
+          if (imagesToPersist.length > 0) {
+            // Attempt to save only the first (most recent if prepended) image
+            localStorage.setItem('generatedImages', JSON.stringify([imagesToPersist[0]]));
           } else {
-            // If generatedImages is empty, ensure localStorage is also empty/cleared for our key
             localStorage.removeItem('generatedImages');
           }
         } catch (fallbackError) {
@@ -74,7 +71,6 @@ export default function ImaginariumPage() {
           });
         }
       } else {
-        // Generic storage error
         toast({
           title: "Storage Error",
           description: "An unexpected error occurred while saving images.",
@@ -95,7 +91,6 @@ export default function ImaginariumPage() {
     toast({ title: "Generating Image...", description: "Hold tight, your masterpiece is on its way!" });
     try {
       const newImage = await handleGenerateImage(prompt);
-      // Prepend new image and then let useEffect handle trimming for localStorage
       setGeneratedImages((prevImages) => [newImage, ...prevImages]);
       toast({ title: "Image Generated!", description: "Your new image has been added to the gallery." });
     } catch (error) {
@@ -136,6 +131,12 @@ export default function ImaginariumPage() {
     toast({ title: "Prompt Updated", description: "The selected suggestion is now in the prompt box." });
   };
 
+  const handleDeleteImage = (id: string) => {
+    setGeneratedImages((prevImages) => prevImages.filter((img) => img.id !== id));
+    toast({ title: "Image Deleted", description: "The image has been removed from your gallery." });
+  };
+
+
   return (
     <div className="min-h-screen flex flex-col">
       <Header />
@@ -164,7 +165,7 @@ export default function ImaginariumPage() {
       </main>
       {/* Gallery outside the max-w-4xl container for wider display if needed */}
       <div className="w-full"> 
-         <ImageGallery images={generatedImages} />
+         <ImageGallery images={generatedImages} onDeleteImage={handleDeleteImage} />
       </div>
       <footer className="text-center py-6 text-sm text-muted-foreground">
         <p>&copy; {new Date().getFullYear()} Imaginarium. All rights reserved.</p>

@@ -6,9 +6,10 @@ import type { GeneratedImage } from '@/app/actions';
 
 interface ImageGalleryProps {
   images: GeneratedImage[];
+  onDeleteImage: (id: string) => void;
 }
 
-const ImageGallery: FC<ImageGalleryProps> = ({ images }) => {
+const ImageGallery: FC<ImageGalleryProps> = ({ images, onDeleteImage }) => {
   if (images.length === 0) {
     return (
       <div className="text-center py-10 text-muted-foreground">
@@ -20,7 +21,7 @@ const ImageGallery: FC<ImageGalleryProps> = ({ images }) => {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 p-4">
       {images.map((image) => (
-        <ImageCard key={image.id} image={image} />
+        <ImageCard key={image.id} image={image} onDelete={onDeleteImage} />
       ))}
     </div>
   );
