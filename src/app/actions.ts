@@ -74,7 +74,6 @@ export async function handleRefineExistingImage(originalImage: GeneratedImage, r
   const imageId = `${Date.now()}-refined-${refinementPrompt.substring(0, 10).replace(/\s/g, '_')}`;
   const promptWords = refinementPrompt.split(' ').slice(0, 2);
   const aiHint = promptWords.join(' ');
-  // Try to preserve original name, or generate new one if significantly different
   const newName = sanitizeFilename(refinementPrompt, `refined_${originalImage.name || imageId}`);
 
 
@@ -84,8 +83,8 @@ export async function handleRefineExistingImage(originalImage: GeneratedImage, r
     return {
       id: imageId,
       url: fallbackImageUrl,
-      prompt: refinementPrompt,
-      alt: `Error refining image. Original image was not a data URI. Placeholder shown.`,
+      prompt: originalImage.prompt, // Keep original prompt for display
+      alt: `Error refining image. Original image was not a data URI. Placeholder shown. Original prompt: '${originalImage.prompt}'.`,
       name: newName,
       aiHint: aiHint,
     };
@@ -96,12 +95,12 @@ export async function handleRefineExistingImage(originalImage: GeneratedImage, r
     const result: RefineImageOutput = await refineImageAiFlow(input);
 
     return {
-      id: imageId, // Usually keep original ID if it's an update, but new ID for new object is also fine for this app's logic
+      id: imageId, 
       url: result.imageDataUri,
-      prompt: refinementPrompt,
-      alt: `AI refined image based on prompt: ${refinementPrompt}`,
-      name: newName,
-      aiHint: aiHint
+      prompt: originalImage.prompt, // Keep the original image's prompt for display on the card
+      alt: `AI-refined image. Original prompt: '${originalImage.prompt}'. Refinement instructions: '${refinementPrompt}'.`,
+      name: newName, // Name can be based on refinementPrompt
+      aiHint: aiHint // AI hint can be based on refinementPrompt
     };
   } catch (error) {
     console.error("Error refining image with Genkit AI:", error);
@@ -109,10 +108,11 @@ export async function handleRefineExistingImage(originalImage: GeneratedImage, r
     return {
       id: imageId,
       url: fallbackImageUrl,
-      prompt: refinementPrompt,
-      alt: `Error refining image for prompt: ${refinementPrompt}. Placeholder shown.`,
+      prompt: originalImage.prompt, // Keep original prompt for display
+      alt: `Error refining image. Original prompt: '${originalImage.prompt}'. Attempted refinement: '${refinementPrompt}'. Placeholder shown.`,
       name: newName,
       aiHint: aiHint
     };
   }
 }
+
