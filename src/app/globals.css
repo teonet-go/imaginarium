@@ -2,9 +2,11 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
-}
+/*
+  The body font-family is now handled by Tailwind's `font-sans` class, 
+  which is configured in tailwind.config.ts to use `var(--font-geist-sans)`.
+  This class is applied to the body tag in src/app/layout.tsx.
+*/
 
 @layer base {
   :root {
@@ -112,6 +114,8 @@ body {
   }
   body {
     @apply bg-background text-foreground;
+    /* font-sans will be applied via className in RootLayout for clarity */
+    /* or could be @apply font-sans here if preferred */
     font-feature-settings: "rlig" 1, "calt" 1;
   }
 }
