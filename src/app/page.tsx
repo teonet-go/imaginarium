@@ -9,7 +9,7 @@ import ImageGallery from '@/components/image-generation/image-gallery';
 import { 
   handleGenerateImage, 
   handleRefinePrompt, 
-  handleRefineExistingImage, // Import new action
+  handleRefineExistingImage,
   type GeneratedImage 
 } from './actions';
 import type { RefinePromptOutput } from '@/ai/flows/refine-prompt';
@@ -18,25 +18,41 @@ import { Separator } from '@/components/ui/separator';
 
 const MAX_STORED_IMAGES = 10; 
 
+function sanitizeFilenameForDefault(prompt: string, id: string): string {
+  const baseName = prompt || `image_${id}`;
+  return baseName.substring(0, 30).replace(/[^\w.-]/gi, '_').replace(/\s+/g, '_').toLowerCase() || 'untitled_image';
+}
+
 export default function ImaginariumPage() {
   const [prompt, setPrompt] = useState<string>('');
   const [generatedImages, setGeneratedImages] = useState<GeneratedImage[]>([]);
   const [refinedData, setRefinedData] = useState<RefinePromptOutput | null>(null);
-  const [isGenerating, setIsGenerating] = useState<boolean>(false); // Covers both new and refined image generation
-  const [isRefiningPrompt, setIsRefiningPrompt] = useState<boolean>(false); // Specifically for text prompt refinement
+  const [isGenerating, setIsGenerating] = useState<boolean>(false); 
+  const [isRefiningPrompt, setIsRefiningPrompt] = useState<boolean>(false);
   const [imageBeingRefined, setImageBeingRefined] = useState<GeneratedImage | null>(null);
   
   const { toast } = useToast();
   const promptFormRef = useRef<HTMLDivElement>(null);
 
-
   useEffect(() => {
     const storedImages = localStorage.getItem('generatedImages');
     if (storedImages) {
       try {
-        const parsedImages = JSON.parse(storedImages);
+        const parsedImages: Partial<GeneratedImage>[] = JSON.parse(storedImages);
         if (Array.isArray(parsedImages)) {
-           setGeneratedImages(parsedImages);
+           const validatedImages = parsedImages.map(img => {
+             const id = img.id || `${Date.now()}-${Math.random()}`;
+             const prompt = img.prompt || 'Untitled Prompt';
+             return {
+               id,
+               url: img.url || `https://picsum.photos/seed/${encodeURIComponent(id)}/512/512?text=Invalid+Image`,
+               prompt,
+               alt: img.alt || `Image for prompt: ${prompt}`,
+               name: img.name || sanitizeFilenameForDefault(prompt, id),
+               aiHint: img.aiHint
+             };
+           }) as GeneratedImage[];
+           setGeneratedImages(validatedImages);
         }
       } catch (error) {
         console.error("Error parsing images from local storage:", error);
@@ -46,48 +62,50 @@ export default function ImaginariumPage() {
   }, []);
 
   useEffect(() => {
-    const imagesToPersist = Array.isArray(generatedImages)
-      ? generatedImages.slice(0, MAX_STORED_IMAGES)
-      : [];
-  
-    try {
-      localStorage.setItem('generatedImages', JSON.stringify(imagesToPersist));
-    } catch (error) {
-      console.error("Error saving images to local storage:", error);
-      if (error instanceof DOMException && (error.name === 'QuotaExceededError' || error.code === 22 || (error.message && error.message.toLowerCase().includes('quota')))) {
-        toast({
-          title: "Local Storage Full",
-          description: "Could not save all recent images as local storage is full. Trying to save just the latest.",
-          variant: "destructive",
-        });
-        try {
-          if (imagesToPersist.length > 0) {
-            localStorage.setItem('generatedImages', JSON.stringify([imagesToPersist[0]]));
-          } else {
-            localStorage.removeItem('generatedImages');
-          }
-        } catch (fallbackError) {
-          console.error("Failed to save even the single latest image after quota error:", fallbackError);
+    if (generatedImages.length === 0 && !localStorage.getItem('generatedImagesInitialLoadAttempted')) {
+      // Avoid saving an empty array on initial load if nothing was in local storage
+      localStorage.setItem('generatedImagesInitialLoadAttempted', 'true');
+      return;
+    }
+    if (generatedImages.length > 0 || localStorage.getItem('generatedImagesInitialLoadAttempted')) { // Only save if images exist or if we've tried loading
+      const imagesToPersist = generatedImages.slice(0, MAX_STORED_IMAGES);
+      try {
+        localStorage.setItem('generatedImages', JSON.stringify(imagesToPersist));
+      } catch (error) {
+        console.error("Error saving images to local storage:", error);
+        if (error instanceof DOMException && (error.name === 'QuotaExceededError' || error.code === 22 || (error.message && error.message.toLowerCase().includes('quota')))) {
           toast({
-            title: "Storage Critically Full",
-            description: "Unable to save any images. Your browser's local storage is critically full. Please clear some space.",
+            title: "Local Storage Full",
+            description: "Could not save all recent images as local storage is full. Trying to save just the latest.",
+            variant: "destructive",
+          });
+          try {
+            if (imagesToPersist.length > 0) {
+              localStorage.setItem('generatedImages', JSON.stringify([imagesToPersist[0]]));
+            } else {
+              localStorage.removeItem('generatedImages');
+            }
+          } catch (fallbackError) {
+            console.error("Failed to save even the single latest image after quota error:", fallbackError);
+            toast({
+              title: "Storage Critically Full",
+              description: "Unable to save any images. Your browser's local storage is critically full. Please clear some space.",
+              variant: "destructive",
+            });
+          }
+        } else {
+          toast({
+            title: "Storage Error",
+            description: "An unexpected error occurred while saving images.",
             variant: "destructive",
           });
         }
-      } else {
-        toast({
-          title: "Storage Error",
-          description: "An unexpected error occurred while saving images.",
-          variant: "destructive",
-        });
       }
     }
   }, [generatedImages, toast]);
 
   const handlePromptInputChange = (newPrompt: string) => {
     setPrompt(newPrompt);
-    // If prompt is cleared while in image refinement mode, it doesn't auto-exit.
-    // Exiting refinement mode is handled by clicking "Refine Prompt" button.
   };
 
   const handleGenerateOrUpdateImage = async () => {
@@ -98,24 +116,27 @@ export default function ImaginariumPage() {
     setIsGenerating(true);
     setRefinedData(null); 
 
-    if (imageBeingRefined) { // Refining an existing image
+    if (imageBeingRefined) { 
       toast({ title: "Updating Image...", description: "Applying your refinements, please wait." });
       try {
-        if (!imageBeingRefined.url.startsWith('data:')) {
-          toast({ title: "Refinement Error", description: "Cannot refine this image type (not a data URI).", variant: "destructive" });
-          setIsGenerating(false);
-          setImageBeingRefined(null); // Exit refinement mode
-          return;
-        }
-        const updatedImage = await handleRefineExistingImage(imageBeingRefined.url, prompt);
-        setGeneratedImages((prevImages) => [updatedImage, ...prevImages.filter(img => img.id !== imageBeingRefined.id)]); // Add new, remove old if IDs were same, or just add if new ID
-        toast({ title: "Image Updated!", description: "Your refined image has been added to the gallery." });
-        setImageBeingRefined(null); // Exit refinement mode
+        const updatedImage = await handleRefineExistingImage(imageBeingRefined, prompt);
+        setGeneratedImages((prevImages) => {
+            const newImages = prevImages.map(img => img.id === imageBeingRefined.id ? updatedImage : img);
+            // If the refined image got a new ID, we might need to add it and remove old.
+            // For now, assume handleRefineExistingImage returns an image that should replace the original.
+            // If original ID is not found (e.g. imageBeingRefined was stale), add as new.
+            if (!prevImages.find(img => img.id === imageBeingRefined.id)) {
+                 return [updatedImage, ...prevImages];
+            }
+            return newImages;
+        });
+        toast({ title: "Image Updated!", description: "Your refined image has been updated in the gallery." });
+        setImageBeingRefined(null); 
       } catch (error) {
         console.error("Error updating image:", error);
         toast({ title: "Update Failed", description: "Something went wrong. Please try again.", variant: "destructive" });
       }
-    } else { // Generating a new image
+    } else { 
       toast({ title: "Generating Image...", description: "Hold tight, your masterpiece is on its way!" });
       try {
         const newImage = await handleGenerateImage(prompt);
@@ -137,7 +158,7 @@ export default function ImaginariumPage() {
     setIsRefiningPrompt(true);
     setRefinedData(null);
     if (imageBeingRefined) {
-      setImageBeingRefined(null); // Exit image refinement mode if user clicks "Refine Prompt"
+      setImageBeingRefined(null); 
       toast({ title: "Exited Image Refinement", description: "Now refining prompt text for a new image."});
     }
     toast({ title: "Refining Prompt Text...", description: "AI is working its magic on your prompt." });
@@ -161,18 +182,13 @@ export default function ImaginariumPage() {
     setPrompt(selectedPrompt);
     setRefinedData(null); 
     toast({ title: "Prompt Updated", description: "The selected suggestion is now in the prompt box." });
-    if (imageBeingRefined) {
-      // If user was refining an image and selected a text prompt suggestion,
-      // assume they still want to refine that image but with the new text.
-      // So, imageBeingRefined remains set.
-    }
   };
 
   const handleDeleteImage = (id: string) => {
     setGeneratedImages((prevImages) => prevImages.filter((img) => img.id !== id));
     if (imageBeingRefined && imageBeingRefined.id === id) {
-      setImageBeingRefined(null); // Stop refining if the image being refined is deleted
-      setPrompt(''); // Clear prompt as well
+      setImageBeingRefined(null); 
+      setPrompt(''); 
       toast({ title: "Image Deleted", description: "The image has been removed and refinement mode exited." });
     } else {
       toast({ title: "Image Deleted", description: "The image has been removed from your gallery." });
@@ -182,13 +198,23 @@ export default function ImaginariumPage() {
   const handleStartImageRefinement = (imageToRefine: GeneratedImage) => {
     setPrompt(imageToRefine.prompt);
     setImageBeingRefined(imageToRefine);
-    setRefinedData(null); // Clear any text prompt suggestions
+    setRefinedData(null); 
     toast({ title: "Refining Image", description: "Original prompt loaded. Modify it and click 'Update Image'." });
     promptFormRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
+  const handleUpdateImageName = (id: string, newName: string) => {
+    setGeneratedImages(prevImages =>
+      prevImages.map(img =>
+        img.id === id ? { ...img, name: newName } : img
+      )
+    );
+    toast({ title: "Image Renamed", description: `Image name set to: ${newName}` });
+  };
+
+
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col bg-background">
       <Header />
       <main className="flex-grow container mx-auto px-4 py-8 max-w-4xl">
         <div ref={promptFormRef}>
@@ -221,6 +247,7 @@ export default function ImaginariumPage() {
             images={generatedImages} 
             onDeleteImage={handleDeleteImage}
             onStartRefineImage={handleStartImageRefinement} 
+            onUpdateImageName={handleUpdateImageName}
           />
       </div>
       <footer className="text-center py-6 text-sm text-muted-foreground">

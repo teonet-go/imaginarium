@@ -9,9 +9,10 @@ interface ImageGalleryProps {
   images: GeneratedImage[];
   onDeleteImage: (id: string) => void;
   onStartRefineImage: (image: GeneratedImage) => void;
+  onUpdateImageName: (id: string, newName: string) => void;
 }
 
-const ImageGallery: FC<ImageGalleryProps> = ({ images, onDeleteImage, onStartRefineImage }) => {
+const ImageGallery: FC<ImageGalleryProps> = ({ images, onDeleteImage, onStartRefineImage, onUpdateImageName }) => {
   if (images.length === 0) {
     return (
       <div className="text-center py-10 text-muted-foreground">
@@ -28,6 +29,7 @@ const ImageGallery: FC<ImageGalleryProps> = ({ images, onDeleteImage, onStartRef
           image={image} 
           onDelete={onDeleteImage} 
           onStartRefine={onStartRefineImage} 
+          onUpdateName={onUpdateImageName}
         />
       ))}
     </div>
@@ -35,4 +37,3 @@ const ImageGallery: FC<ImageGalleryProps> = ({ images, onDeleteImage, onStartRef
 };
 
 export default ImageGallery;
-

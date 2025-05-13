@@ -10,8 +10,15 @@ export interface GeneratedImage {
   url: string; // Can be a regular URL or a data URI
   prompt: string;
   alt: string;
+  name: string; // For filename
   aiHint?: string;
 }
+
+function sanitizeFilename(name: string, defaultName: string = 'untitled_image'): string {
+  const sanitized = name.substring(0, 50).replace(/[^\w.-]/gi, '_').replace(/\s+/g, '_').toLowerCase();
+  return sanitized || defaultName;
+}
+
 
 export async function handleRefinePrompt(originalPrompt: string): Promise<RefinePromptOutput> {
   if (!originalPrompt.trim()) {
@@ -35,6 +42,7 @@ export async function handleGenerateImage(prompt: string): Promise<GeneratedImag
   const imageId = `${Date.now()}-${prompt.substring(0, 10).replace(/\s/g, '_')}`;
   const promptWords = prompt.split(' ').slice(0, 2);
   const aiHint = promptWords.join(' ');
+  const imageName = sanitizeFilename(prompt, `image_${imageId}`);
 
   try {
     const input: GenerateImageInput = { prompt };
@@ -45,58 +53,65 @@ export async function handleGenerateImage(prompt: string): Promise<GeneratedImag
       url: result.imageDataUri,
       prompt: prompt,
       alt: `AI generated image for prompt: ${prompt}`,
+      name: imageName,
       aiHint: aiHint
     };
   } catch (error) {
     console.error("Error generating image with Genkit AI:", error);
-    const fallbackImageUrl = `https://picsum.photos/seed/${encodeURIComponent(imageId)}/512/512?text=Error+Generating+Image`;
+    const fallbackImageUrl = `https://picsum.photos/seed/${encodeURIComponent(imageId)}/512/512?text=Error+Generating`;
     return {
       id: imageId,
       url: fallbackImageUrl,
       prompt: prompt,
       alt: `Error generating image for prompt: ${prompt}. Placeholder shown.`,
+      name: imageName,
       aiHint: aiHint
     };
   }
 }
 
-export async function handleRefineExistingImage(originalImageDataUri: string, refinementPrompt: string): Promise<GeneratedImage> {
+export async function handleRefineExistingImage(originalImage: GeneratedImage, refinementPrompt: string): Promise<GeneratedImage> {
   const imageId = `${Date.now()}-refined-${refinementPrompt.substring(0, 10).replace(/\s/g, '_')}`;
   const promptWords = refinementPrompt.split(' ').slice(0, 2);
   const aiHint = promptWords.join(' ');
+  // Try to preserve original name, or generate new one if significantly different
+  const newName = sanitizeFilename(refinementPrompt, `refined_${originalImage.name || imageId}`);
 
-  if (!originalImageDataUri.startsWith('data:')) {
+
+  if (!originalImage.url.startsWith('data:')) {
     console.error("Error: Original image for refinement is not a data URI.");
-    // Fallback or specific error handling for non-data URI
-    const fallbackImageUrl = `https://picsum.photos/seed/${encodeURIComponent(imageId)}/512/512?text=Error+Refining+Image`;
+    const fallbackImageUrl = `https://picsum.photos/seed/${encodeURIComponent(imageId)}/512/512?text=Error+Refining`;
     return {
       id: imageId,
       url: fallbackImageUrl,
       prompt: refinementPrompt,
       alt: `Error refining image. Original image was not a data URI. Placeholder shown.`,
+      name: newName,
       aiHint: aiHint,
     };
   }
   
   try {
-    const input: RefineImageInput = { originalImageDataUri, refinementPrompt };
+    const input: RefineImageInput = { originalImageDataUri: originalImage.url, refinementPrompt };
     const result: RefineImageOutput = await refineImageAiFlow(input);
 
     return {
-      id: imageId,
+      id: imageId, // Usually keep original ID if it's an update, but new ID for new object is also fine for this app's logic
       url: result.imageDataUri,
       prompt: refinementPrompt,
       alt: `AI refined image based on prompt: ${refinementPrompt}`,
+      name: newName,
       aiHint: aiHint
     };
   } catch (error) {
     console.error("Error refining image with Genkit AI:", error);
-    const fallbackImageUrl = `https://picsum.photos/seed/${encodeURIComponent(imageId)}/512/512?text=Error+Refining+Image`;
+    const fallbackImageUrl = `https://picsum.photos/seed/${encodeURIComponent(imageId)}/512/512?text=Error+Refining`;
     return {
       id: imageId,
       url: fallbackImageUrl,
       prompt: refinementPrompt,
       alt: `Error refining image for prompt: ${refinementPrompt}. Placeholder shown.`,
+      name: newName,
       aiHint: aiHint
     };
   }
