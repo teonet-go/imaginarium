@@ -66,28 +66,39 @@ const ImageCard: FC<ImageCardProps> = ({ image, onDelete, onStartRefine, onUpdat
       return;
     }
     try {
-      // For data URIs, create blob directly
+      const baseFilename = (image.name && image.name.trim() !== '') ? image.name.trim() : 'imaginarium_image';
+      let filenameWithExtension: string;
+
       if (image.url.startsWith('data:')) {
         const response = await fetch(image.url);
         const blob = await response.blob();
         const objectUrl = window.URL.createObjectURL(blob);
         const link = document.createElement('a');
         const extension = getExtensionFromDataUri(image.url);
-        const filename = (image.name || 'imaginarium_image').replace(/[^\w.-]/gi, '_') + extension;
+        filenameWithExtension = baseFilename + extension;
         link.href = objectUrl;
-        link.download = filename;
+        link.download = filenameWithExtension;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
         window.URL.revokeObjectURL(objectUrl);
       } else {
-        // For regular URLs, attempt to download (CORS might be an issue)
-        // This part might need a server-side proxy for reliable downloads from external URLs
+        // For regular URLs, attempt to download
         const link = document.createElement('a');
-        const extension = image.url.includes('.') ? `.${image.url.split('.').pop()}` : getExtensionFromDataUri(image.url); // Basic extension guess
-        const filename = (image.name || 'imaginarium_image').replace(/[^\w.-]/gi, '_') + extension;
+        
+        let extension = '.png'; // Default extension
+        const lastDotIndex = image.url.lastIndexOf('.');
+        const lastSlashIndex = image.url.lastIndexOf('/');
+        if (lastDotIndex > -1 && lastDotIndex > lastSlashIndex) { // Ensure dot is part of filename not path
+            const possibleExt = image.url.substring(lastDotIndex).toLowerCase();
+            const commonImageExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg'];
+            if (commonImageExtensions.includes(possibleExt)) {
+                extension = possibleExt;
+            }
+        }
+        filenameWithExtension = baseFilename + extension;
         link.href = image.url;
-        link.download = filename; 
+        link.download = filenameWithExtension; 
         link.target = '_blank'; // Open in new tab as fallback if direct download fails
         document.body.appendChild(link);
         link.click();
