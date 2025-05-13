@@ -10,6 +10,8 @@ import type { RefinePromptOutput } from '@/ai/flows/refine-prompt';
 import { useToast } from "@/hooks/use-toast";
 import { Separator } from '@/components/ui/separator';
 
+const MAX_STORED_IMAGES = 10; // Define a limit for images in localStorage
+
 export default function ImaginariumPage() {
   const [prompt, setPrompt] = useState<string>('');
   const [generatedImages, setGeneratedImages] = useState<GeneratedImage[]>([]);
@@ -34,10 +36,53 @@ export default function ImaginariumPage() {
     }
   }, []);
 
-  // Save images to local storage whenever they change
+  // Save images to local storage whenever they change, respecting the limit
   useEffect(() => {
-    localStorage.setItem('generatedImages', JSON.stringify(generatedImages));
-  }, [generatedImages]);
+    const imagesToPersist = generatedImages.slice(0, MAX_STORED_IMAGES);
+
+    try {
+      localStorage.setItem('generatedImages', JSON.stringify(imagesToPersist));
+    } catch (error) {
+      console.error("Error saving images to local storage:", error);
+      // Check for QuotaExceededError (name or code, message check as fallback)
+      if (error instanceof DOMException && (error.name === 'QuotaExceededError' || error.code === 22 || (error.message && error.message.toLowerCase().includes('quota')))) {
+        toast({
+          title: "Local Storage Full",
+          description: "Could not save all recent images as local storage is full. Trying to save just the latest.",
+          variant: "destructive",
+        });
+        // Attempt to save only the very latest image as a fallback
+        try {
+          if (generatedImages.length > 0) {
+            localStorage.setItem('generatedImages', JSON.stringify([generatedImages[0]]));
+            // Avoid rapid toasts; the primary error toast is enough indication.
+            // Optionally, add a success toast if this fallback works and user needs to know.
+            // toast({
+            //   title: "Saved Latest Image",
+            //   description: "Successfully saved only the most recent image due to storage limits.",
+            // });
+          } else {
+            // If generatedImages is empty, ensure localStorage is also empty/cleared for our key
+            localStorage.removeItem('generatedImages');
+          }
+        } catch (fallbackError) {
+          console.error("Failed to save even the single latest image after quota error:", fallbackError);
+          toast({
+            title: "Storage Critically Full",
+            description: "Unable to save any images. Your browser's local storage is critically full. Please clear some space.",
+            variant: "destructive",
+          });
+        }
+      } else {
+        // Generic storage error
+        toast({
+          title: "Storage Error",
+          description: "An unexpected error occurred while saving images.",
+          variant: "destructive",
+        });
+      }
+    }
+  }, [generatedImages, toast]);
 
 
   const handleGenerate = async () => {
@@ -50,6 +95,7 @@ export default function ImaginariumPage() {
     toast({ title: "Generating Image...", description: "Hold tight, your masterpiece is on its way!" });
     try {
       const newImage = await handleGenerateImage(prompt);
+      // Prepend new image and then let useEffect handle trimming for localStorage
       setGeneratedImages((prevImages) => [newImage, ...prevImages]);
       toast({ title: "Image Generated!", description: "Your new image has been added to the gallery." });
     } catch (error) {
