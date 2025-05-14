@@ -226,7 +226,7 @@ const ImageCard: FC<ImageCardProps> = ({ image, onDelete, onStartRefine, onUpdat
           {image.prompt.length > 80 ? `${image.prompt.substring(0, 77)}...` : image.prompt}
         </CardTitle>
       </CardHeader>
-      <CardContent className="p-0 aspect-square relative">
+      <CardContent className="p-0 mb-2 aspect-square relative">
         <Image
           src={image.url}
           alt={image.alt}
