@@ -11,15 +11,9 @@ export interface GeneratedImage {
   url: string; // Can be a regular URL or a data URI
   prompt: string;
   alt: string;
-  name: string; // For filename
+  name: string; // For filename, will be empty by default for new images
   aiHint?: string;
 }
-
-function sanitizeFilename(name: string, defaultName: string = 'untitled_image'): string {
-  const sanitized = name.substring(0, 50).replace(/[^\w.-]/gi, '_').replace(/\s+/g, '_').toLowerCase();
-  return sanitized || defaultName;
-}
-
 
 export async function handleRefinePrompt(originalPrompt: string): Promise<RefinePromptOutput> {
   if (!originalPrompt.trim()) {
@@ -43,7 +37,6 @@ export async function handleGenerateImage(prompt: string): Promise<GeneratedImag
   const imageId = `${Date.now()}-${prompt.substring(0, 10).replace(/\s/g, '_')}`;
   const promptWords = prompt.split(' ').slice(0, 2);
   const aiHint = promptWords.join(' ');
-  const imageName = sanitizeFilename(prompt, `image_${imageId}`);
 
   try {
     const input: GenerateImageInput = { prompt };
@@ -54,7 +47,7 @@ export async function handleGenerateImage(prompt: string): Promise<GeneratedImag
       url: result.imageDataUri,
       prompt: prompt,
       alt: `AI generated image for prompt: ${prompt}`,
-      name: imageName,
+      name: '', // Name is empty by default
       aiHint: aiHint
     };
   } catch (error) {
@@ -65,7 +58,7 @@ export async function handleGenerateImage(prompt: string): Promise<GeneratedImag
       url: fallbackImageUrl,
       prompt: prompt,
       alt: `Error generating image for prompt: ${prompt}. Placeholder shown.`,
-      name: imageName,
+      name: '', // Name is empty by default
       aiHint: aiHint
     };
   }
@@ -75,18 +68,16 @@ export async function handleRefineExistingImage(originalImage: GeneratedImage, r
   const imageId = `${Date.now()}-refined-${refinementPrompt.substring(0, 10).replace(/\s/g, '_')}`;
   const promptWords = refinementPrompt.split(' ').slice(0, 2);
   const aiHint = promptWords.join(' ');
-  const newName = sanitizeFilename(refinementPrompt, `refined_${originalImage.name || imageId}`);
-
-
+  
   if (!originalImage.url.startsWith('data:')) {
     console.error("Error: Original image for refinement is not a data URI.");
     const fallbackImageUrl = `https://picsum.photos/seed/${encodeURIComponent(imageId)}/512/512?text=Error+Refining`;
     return {
       id: imageId,
       url: fallbackImageUrl,
-      prompt: originalImage.prompt, // Keep original prompt for display
+      prompt: originalImage.prompt, 
       alt: `Error refining image. Original image was not a data URI. Placeholder shown. Original prompt: '${originalImage.prompt}'.`,
-      name: newName,
+      name: originalImage.name || '', // Keep original name or empty if it was empty
       aiHint: aiHint,
     };
   }
@@ -98,10 +89,10 @@ export async function handleRefineExistingImage(originalImage: GeneratedImage, r
     return {
       id: imageId, 
       url: result.imageDataUri,
-      prompt: originalImage.prompt, // Keep the original image's prompt for display on the card
+      prompt: originalImage.prompt, 
       alt: `AI-refined image. Original prompt: '${originalImage.prompt}'. Refinement instructions: '${refinementPrompt}'.`,
-      name: newName, // Name can be based on refinementPrompt
-      aiHint: aiHint // AI hint can be based on refinementPrompt
+      name: originalImage.name || '', // Keep original name or empty if it was empty
+      aiHint: aiHint 
     };
   } catch (error) {
     console.error("Error refining image with Genkit AI:", error);
@@ -109,9 +100,9 @@ export async function handleRefineExistingImage(originalImage: GeneratedImage, r
     return {
       id: imageId,
       url: fallbackImageUrl,
-      prompt: originalImage.prompt, // Keep original prompt for display
+      prompt: originalImage.prompt, 
       alt: `Error refining image. Original prompt: '${originalImage.prompt}'. Attempted refinement: '${refinementPrompt}'. Placeholder shown.`,
-      name: newName,
+      name: originalImage.name || '', // Keep original name or empty if it was empty
       aiHint: aiHint
     };
   }
@@ -130,62 +121,28 @@ export async function handleUploadImageToS3(
     return { success: false, message: 'Image is not a valid data URI and cannot be uploaded.' };
   }
 
-  if (!s3Config.accessKeyId || !s3Config.secretAccessKey || !s3Config.bucketName) { // prefix is optional for path, but these are mandatory
+  if (!s3Config.accessKeyId || !s3Config.secretAccessKey || !s3Config.bucketName) { 
      return { success: false, message: 'S3 configuration (Access Key, Secret Key, Bucket Name) is incomplete. Please check settings.' };
   }
+  
+  if (!image.name || image.name.trim() === '') {
+    return { success: false, message: 'Image name is required for S3 upload. Please provide a name.' };
+  }
+
 
   // Placeholder for actual S3 upload logic
-  // In a real app, you would use an S3 SDK (e.g., aws-sdk or a MinIO specific one if preferred).
-  // Example structure for aws-sdk with MinIO (often compatible):
-  // const AWS = require('aws-sdk');
-  // const s3 = new AWS.S3({
-  //   accessKeyId: s3Config.accessKeyId,
-  //   secretAccessKey: s3Config.secretAccessKey,
-  //   endpoint: 'YOUR_MINIO_ENDPOINT_URL', // e.g., 'http://localhost:9000'
-  //   s3ForcePathStyle: true, // Important for MinIO
-  //   signatureVersion: 'v4',
-  // });
-  // const base64Data = Buffer.from(image.url.replace(/^data:image\/\w+;base64,/, ""), 'base64');
-  // const typeMatch = image.url.match(/^data:image\/(\w+);base64,/);
-  // const type = typeMatch ? typeMatch[1] : 'png';
-  //
-  // let s3Key = image.name;
-  // if (s3Config.prefix) {
-  //    const normalizedPrefix = s3Config.prefix.endsWith('/') ? s3Config.prefix : `${s3Config.prefix}/`;
-  //    s3Key = `${normalizedPrefix}${image.name}`;
-  // }
-  // s3Key = `${s3Key}.${type}`; // Add extension to the S3 key
-  //
-  // const params = {
-  //   Bucket: s3Config.bucketName,
-  //   Key: s3Key,
-  //   Body: base64Data,
-  //   ContentEncoding: 'base64',
-  //   ContentType: `image/${type}`,
-  //   // ACL: 'public-read', // Optional: if you want the image to be publicly accessible - check MinIO policies
-  // };
-  // try {
-  //   const { Location } = await s3.upload(params).promise(); // Location might not be standard for all S3-likes
-  //   // For MinIO, you might construct the URL yourself if Location is not returned/reliable
-  //   const uploadedUrl = Location || `YOUR_MINIO_ENDPOINT_URL/${s3Config.bucketName}/${s3Key}`;
-  //   return { success: true, message: 'Image uploaded to S3 successfully!', url: uploadedUrl };
-  // } catch (error) {
-  //   console.error('S3 Upload Error:', error);
-  //   return { success: false, message: `S3 Upload Failed: ${error.message}` };
-  // }
-
   await new Promise(resolve => setTimeout(resolve, 1500)); 
   
-  let s3ObjectKey = image.name;
+  let s3ObjectKey = image.name.trim(); // Use trimmed name
   if (s3Config.prefix) {
      const normalizedPrefix = s3Config.prefix.endsWith('/') || s3Config.prefix === '' ? s3Config.prefix : `${s3Config.prefix}/`;
-     s3ObjectKey = `${normalizedPrefix}${image.name}`;
+     s3ObjectKey = `${normalizedPrefix}${s3ObjectKey}`;
   }
   const typeMatch = image.url.match(/^data:image\/(\w+);base64,/);
   const extension = typeMatch ? typeMatch[1] : 'png';
 
 
-  const mockS3Url = `s3://${s3Config.bucketName}/${s3ObjectKey}.${extension}`; // Generic S3 path
+  const mockS3Url = `s3://${s3Config.bucketName}/${s3ObjectKey}.${extension}`; 
 
-  return { success: true, message: `Image "${image.name}" would be uploaded to S3. (Mock Path: ${mockS3Url})`, url: mockS3Url };
+  return { success: true, message: `Image "${image.name.trim()}" would be uploaded to S3. (Mock Path: ${mockS3Url})`, url: mockS3Url };
 }

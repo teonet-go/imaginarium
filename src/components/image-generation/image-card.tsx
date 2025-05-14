@@ -24,9 +24,9 @@ interface ImageCardProps {
 }
 
 function getExtensionFromDataUri(dataUri: string): string {
-  if (!dataUri || !dataUri.startsWith('data:')) return '.png'; // Fallback for non-data URIs or malformed
+  if (!dataUri || !dataUri.startsWith('data:')) return '.png'; 
   const mimeTypeMatch = dataUri.match(/^data:(image\/[a-z+.-]+);base64,/);
-  if (!mimeTypeMatch || !mimeTypeMatch[1]) return '.png'; // Fallback if MIME type can't be parsed
+  if (!mimeTypeMatch || !mimeTypeMatch[1]) return '.png'; 
 
   const mimeType = mimeTypeMatch[1];
   switch (mimeType) {
@@ -35,42 +35,46 @@ function getExtensionFromDataUri(dataUri: string): string {
     case 'image/jpg': return '.jpg';
     case 'image/gif': return '.gif';
     case 'image/webp': return '.webp';
-    default: return '.png'; // Fallback for unknown image types
+    default: return '.png'; 
   }
 }
 
-function sanitizeFilenameForDefault(prompt: string, id: string): string {
-  const baseName = prompt || `image_${id}`;
-  return baseName.substring(0, 30).replace(/[^\w.-]/gi, '_').replace(/\s+/g, '_').toLowerCase() || 'untitled_image';
-}
-
-
 const ImageCard: FC<ImageCardProps> = ({ image, onDelete, onStartRefine, onUpdateName }) => {
-  const [editableName, setEditableName] = useState(image.name || sanitizeFilenameForDefault(image.prompt, image.id));
+  const [editableName, setEditableName] = useState(image.name || '');
   const [isUploadingToS3, setIsUploadingToS3] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
-    const defaultName = sanitizeFilenameForDefault(image.prompt, image.id);
-    setEditableName(image.name || defaultName);
-  }, [image.name, image.prompt, image.id]);
+    setEditableName(image.name || '');
+  }, [image.name]);
 
   const handleNameUpdate = () => {
-    const finalName = editableName.trim() || sanitizeFilenameForDefault(image.prompt, image.id);
+    const finalName = editableName.trim();
     if (finalName !== image.name) {
       onUpdateName(image.id, finalName);
+      if(finalName) { // Only toast if a name was actually set
+        toast({ title: "Image Renamed", description: `Image name set to: ${finalName}` });
+      } else if (image.name && !finalName) { // Toast if name was cleared
+        toast({ title: "Image Name Cleared", description: "Image name has been cleared." });
+      }
     }
     setEditableName(finalName); 
   };
 
   const handleDownload = async () => {
+    const currentName = editableName.trim();
+    if (!currentName) {
+      toast({ title: "Имя файла отсутствует", description: "Пожалуйста, укажите имя файла.", variant: "destructive" });
+      return;
+    }
+
     if (!image.url) {
       console.error('Image URL is missing.');
       toast({ title: "Download Error", description: "Image URL is missing.", variant: "destructive" });
       return;
     }
     try {
-      const baseFilename = (image.name && image.name.trim() !== '') ? image.name.trim() : 'imaginarium_image';
+      const baseFilename = currentName;
       let filenameWithExtension: string;
 
       if (image.url.startsWith('data:')) {
@@ -127,6 +131,12 @@ const ImageCard: FC<ImageCardProps> = ({ image, onDelete, onStartRefine, onUpdat
   };
 
   const handleS3Upload = async () => {
+    const currentName = editableName.trim();
+    if (!currentName) {
+      toast({ title: "Имя файла отсутствует", description: "Пожалуйста, укажите имя файла для загрузки в S3.", variant: "destructive" });
+      return;
+    }
+
     const s3Config = loadS3Config();
     if (!s3Config || !s3Config.accessKeyId || !s3Config.bucketName) {
       toast({
@@ -151,12 +161,11 @@ const ImageCard: FC<ImageCardProps> = ({ image, onDelete, onStartRefine, onUpdat
     }
     
     setIsUploadingToS3(true);
-    toast({ title: 'Uploading to S3...', description: `Sending "${image.name}" to your S3 bucket.` });
+    toast({ title: 'Uploading to S3...', description: `Sending "${currentName}" to your S3 bucket.` });
 
     try {
-      // Ensure the image name is up-to-date for upload
-      const currentImageWithPotentiallyUpdatedName = { ...image, name: editableName.trim() || sanitizeFilenameForDefault(image.prompt, image.id) };
-      const result = await handleUploadImageToS3(currentImageWithPotentiallyUpdatedName, s3Config);
+      const imageToUpload = { ...image, name: currentName };
+      const result = await handleUploadImageToS3(imageToUpload, s3Config);
       if (result.success) {
         toast({
           title: 'S3 Upload Successful',
@@ -187,7 +196,7 @@ const ImageCard: FC<ImageCardProps> = ({ image, onDelete, onStartRefine, onUpdat
   };
 
   const canRefine = image.url.startsWith('data:');
-  const canUploadToS3 = image.url.startsWith('data:image'); // More specific check for S3
+  const canUploadToS3 = image.url.startsWith('data:image'); 
 
   return (
     <Card className="overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300 flex flex-col group">
@@ -206,10 +215,11 @@ const ImageCard: FC<ImageCardProps> = ({ image, onDelete, onStartRefine, onUpdat
               if (e.key === 'Enter') {
                 e.preventDefault(); 
                 handleNameUpdate(); 
+                (e.target as HTMLInputElement).blur(); // Optionally blur on enter
               }
             }}
             className="h-9 text-sm mt-1"
-            placeholder="Enter image name"
+            placeholder="Enter image name (required for download/S3)"
           />
         </div>
         <div className="text-xs font-medium text-muted-foreground mb-0.5">Prompt</div>

@@ -18,11 +18,6 @@ import { Separator } from '@/components/ui/separator';
 
 const MAX_STORED_IMAGES = 10; 
 
-function sanitizeFilenameForDefault(prompt: string, id: string): string {
-  const baseName = prompt || `image_${id}`;
-  return baseName.substring(0, 30).replace(/[^\w.-]/gi, '_').replace(/\s+/g, '_').toLowerCase() || 'untitled_image';
-}
-
 export default function ImaginariumPage() {
   const [prompt, setPrompt] = useState<string>('');
   const [generatedImages, setGeneratedImages] = useState<GeneratedImage[]>([]);
@@ -42,13 +37,16 @@ export default function ImaginariumPage() {
         if (Array.isArray(parsedImages)) {
            const validatedImages = parsedImages.map(img => {
              const id = img.id || `${Date.now()}-${Math.random()}`;
-             const prompt = img.prompt || 'Untitled Prompt';
+             const currentPrompt = img.prompt || 'Untitled Prompt';
+             // If img.name is explicitly set (even to empty string), use it.
+             // If img.name is undefined/null (from very old stored data), default to empty string.
+             const name = (typeof img.name === 'string') ? img.name : '';
              return {
                id,
                url: img.url || `https://picsum.photos/seed/${encodeURIComponent(id)}/512/512?text=Invalid+Image`,
-               prompt,
-               alt: img.alt || `Image for prompt: ${prompt}`,
-               name: img.name || sanitizeFilenameForDefault(prompt, id),
+               prompt: currentPrompt,
+               alt: img.alt || `Image for prompt: ${currentPrompt}`,
+               name: name,
                aiHint: img.aiHint
              };
            }) as GeneratedImage[];
@@ -128,7 +126,7 @@ export default function ImaginariumPage() {
         });
         toast({ title: "Image Updated!", description: "Your refined image has been updated in the gallery." });
         setImageBeingRefined(null); 
-        setPrompt(''); // Clear prompt after successful refinement
+        setPrompt(''); 
       } catch (error) {
         console.error("Error updating image:", error);
         toast({ title: "Update Failed", description: "Something went wrong. Please try again.", variant: "destructive" });
@@ -139,7 +137,7 @@ export default function ImaginariumPage() {
         const newImage = await handleGenerateImage(prompt);
         setGeneratedImages((prevImages) => [newImage, ...prevImages]);
         toast({ title: "Image Generated!", description: "Your new image has been added to the gallery." });
-        setPrompt(''); // Clear prompt after successful generation
+        setPrompt(''); 
       } catch (error) {
         console.error("Error generating image:", error);
         toast({ title: "Generation Failed", description: "Something went wrong. Please try again.", variant: "destructive" });
@@ -194,12 +192,10 @@ export default function ImaginariumPage() {
   };
 
   const handleStartImageRefinement = (imageToRefine: GeneratedImage) => {
-    // For refining an existing image, the prompt box should be for refinement instructions,
-    // not pre-filled with the original prompt.
-    setPrompt(''); // Clear prompt or set to a placeholder like "Describe changes..."
+    setPrompt(''); 
     setImageBeingRefined(imageToRefine);
     setRefinedData(null); 
-    toast({ title: "Refining Image", description: `Enter changes for "${imageToRefine.name}" and click 'Update Image'.` });
+    toast({ title: "Refining Image", description: `Enter changes for "${imageToRefine.name || 'this image'}" and click 'Update Image'.` });
     promptFormRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
@@ -209,7 +205,8 @@ export default function ImaginariumPage() {
         img.id === id ? { ...img, name: newName } : img
       )
     );
-    toast({ title: "Image Renamed", description: `Image name set to: ${newName}` });
+    // Toast for renaming is now handled in ImageCard if successful, or here if a general status is needed.
+    // For now, let ImageCard handle success toast as it's closer to the user action.
   };
 
 
@@ -244,7 +241,6 @@ export default function ImaginariumPage() {
             </>
             )}
         </div>
-        {/* ImageGallery container takes full width below the content above */}
         <div className="w-full flex-grow"> 
             <ImageGallery 
                 images={generatedImages} 
