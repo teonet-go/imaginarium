@@ -3,7 +3,7 @@
 
 import { type FC, useState, useEffect } from 'react';
 import Image from 'next/image';
-import { Download, Trash2, Edit3, UploadCloud, Loader2, Eye } from 'lucide-react';
+import { Download, Trash2, Edit3, UploadCloud, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -14,7 +14,8 @@ import { handleUploadImageToS3 } from '@/app/actions';
 import { loadS3Config, type S3Config } from '@/lib/s3-config';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+// useRouter is no longer needed as we are removing navigation to view image page
+// import { useRouter } from 'next/navigation';
 
 
 interface ImageCardProps {
@@ -44,7 +45,7 @@ const ImageCard: FC<ImageCardProps> = ({ image, onDelete, onStartRefine, onUpdat
   const [editableName, setEditableName] = useState(image.name || '');
   const [isUploadingToS3, setIsUploadingToS3] = useState(false);
   const { toast } = useToast();
-  const router = useRouter();
+  // const router = useRouter(); // Removed router
 
   useEffect(() => {
     setEditableName(image.name || '');
@@ -198,13 +199,14 @@ const ImageCard: FC<ImageCardProps> = ({ image, onDelete, onStartRefine, onUpdat
     }
   };
 
-  const handleViewImage = () => {
-    if (image.url && image.id) {
-      router.push(`/view-image/${encodeURIComponent(image.id)}`);
-    } else {
-      toast({ title: "Cannot view image", description: "Image URL or ID is missing.", variant: "destructive"});
-    }
-  };
+  // handleViewImage function removed
+  // const handleViewImage = () => {
+  //   if (image.url && image.id) {
+  //     router.push(`/view-image/${encodeURIComponent(image.id)}`);
+  //   } else {
+  //     toast({ title: "Cannot view image", description: "Image URL or ID is missing.", variant: "destructive"});
+  //   }
+  // };
 
 
   const canRefine = image.url.startsWith('data:');
@@ -242,19 +244,15 @@ const ImageCard: FC<ImageCardProps> = ({ image, onDelete, onStartRefine, onUpdat
         </CardTitle>
       </CardHeader>
       <CardContent className="p-0 aspect-square relative mb-3" style={{margin: '15px'}}>
-        <button 
-          onClick={handleViewImage} 
-          className="absolute inset-0 w-full h-full focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 rounded-md"
-          aria-label={`View image for prompt: ${image.prompt}`}
-          disabled={!isValidImageUrl}
-        >
+        {/* Removed the button wrapper and onClick for image preview */}
+        <div className="absolute inset-0 w-full h-full">
           <Image
             src={isValidImageUrl ? image.url : `https://placehold.co/512x512.png?text=Invalid+URL`}
             alt={image.alt}
             fill
             sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, 33vw"
             style={{ objectFit: 'cover' }}
-            className="transition-transform duration-300 group-hover:scale-105 rounded-t-md"
+            className="transition-transform duration-300 group-hover:scale-105 rounded-md" // Changed rounded-t-md to rounded-md
             data-ai-hint={image.aiHint || 'abstract art'}
             priority={false} 
             onError={(e) => {
@@ -262,10 +260,8 @@ const ImageCard: FC<ImageCardProps> = ({ image, onDelete, onStartRefine, onUpdat
               e.currentTarget.srcset = "";
             }}
           />
-           <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-opacity duration-300 flex items-center justify-center rounded-t-md">
-            <Eye className="w-12 h-12 text-white opacity-0 group-hover:opacity-75 transition-opacity duration-300" />
-          </div>
-        </button>
+          {/* Removed the Eye icon and hover effect for view */}
+        </div>
       </CardContent>
       <CardFooter className="p-2 sm:p-3 mt-auto grid grid-cols-2 sm:grid-cols-4 gap-2">
         <Button onClick={handleDownload} variant="outline" size="sm" className="w-full" disabled={!isValidImageUrl}>
