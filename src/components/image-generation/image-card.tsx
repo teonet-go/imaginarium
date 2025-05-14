@@ -243,7 +243,7 @@ const ImageCard: FC<ImageCardProps> = ({ image, onDelete, onStartRefine, onUpdat
           {image.prompt.length > 80 ? `${image.prompt.substring(0, 77)}...` : image.prompt}
         </CardTitle>
       </CardHeader>
-      <CardContent className="p-0 aspect-square relative mb-3">
+      <CardContent className="p-0 aspect-square relative mb-3" style={{margin: '15px'}}>
         <button 
           onClick={handleViewImage} 
           className="absolute inset-0 w-full h-full focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 rounded-md"
