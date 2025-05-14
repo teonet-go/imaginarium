@@ -2,10 +2,11 @@
 'use client'; // Allow usage in client components for localStorage
 
 export interface S3Config {
+  url: string; // Добавлено новое поле URL
   accessKeyId: string;
   secretAccessKey: string;
   bucketName: string;
-  prefix: string; // Changed from region to prefix
+  prefix: string;
 }
 
 const S3_CONFIG_KEY = 's3ImaginariumConfig'; // Unique key for this app
@@ -30,10 +31,11 @@ export function loadS3Config(): S3Config | null {
         // Ensure default for prefix if it's missing from old stored config
         const parsedConfig = JSON.parse(storedConfig) as Partial<S3Config>;
         return {
+          url: parsedConfig.url || '', 
           accessKeyId: parsedConfig.accessKeyId || '',
           secretAccessKey: parsedConfig.secretAccessKey || '',
           bucketName: parsedConfig.bucketName || '',
-          prefix: parsedConfig.prefix || '', // Provide default for prefix
+          prefix: parsedConfig.prefix || '',
         };
       } catch (e) {
         console.error("Error parsing S3 config from localStorage", e);

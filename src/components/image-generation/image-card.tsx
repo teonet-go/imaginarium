@@ -14,6 +14,7 @@ import { handleUploadImageToS3 } from '@/app/actions';
 import { loadS3Config, type S3Config } from '@/lib/s3-config';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
+import { Client } from 'minio';
 
 
 interface ImageCardProps {
@@ -133,7 +134,7 @@ const ImageCard: FC<ImageCardProps> = ({ image, onDelete, onStartRefine, onUpdat
   const handleS3Upload = async () => {
     const currentName = editableName.trim();
     if (!currentName) {
-      toast({ title: "Имя файла отсутствует", description: "Пожалуйста, укажите имя файла для загрузки в S3.", variant: "destructive" });
+      toast({ title: "No filename provided", description: "Please enter a filename for the upload to S3.", variant: "destructive" });
       return;
     }
 

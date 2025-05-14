@@ -10,10 +10,11 @@ import { saveS3Config, loadS3Config, type S3Config } from '@/lib/s3-config';
 import { Save, RotateCcw } from 'lucide-react';
 
 const initialS3Config: S3Config = {
+  url: '',
   accessKeyId: '',
   secretAccessKey: '',
   bucketName: '',
-  prefix: '', // Changed from region
+  prefix: '', 
 };
 
 export default function S3SettingsForm() {
@@ -82,6 +83,18 @@ export default function S3SettingsForm() {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
+      <div>
+        <Label htmlFor="url">URL</Label>
+        <Input
+          id="url"
+          name="url"
+          type="text"
+          value={s3Config.url}
+          onChange={handleChange}
+          placeholder="Your URL (entry point)"
+          className="mt-1"
+        />
+      </div>
       <div>
         <Label htmlFor="accessKeyId">Access Key ID</Label>
         <Input
