@@ -2,7 +2,7 @@
 'use client'; // Allow usage in client components for localStorage
 
 export interface S3Config {
-  url: string; // Добавлено новое поле URL
+  url: string; 
   accessKeyId: string;
   secretAccessKey: string;
   bucketName: string;

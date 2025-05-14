@@ -14,8 +14,6 @@ import { handleUploadImageToS3 } from '@/app/actions';
 import { loadS3Config, type S3Config } from '@/lib/s3-config';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
-import { Client } from 'minio';
-
 
 interface ImageCardProps {
   image: GeneratedImage;
