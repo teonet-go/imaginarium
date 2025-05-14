@@ -3,7 +3,7 @@
 
 import { type FC, useState, useEffect } from 'react';
 import Image from 'next/image';
-import { Download, Trash2, Edit3, UploadCloud, Loader2 } from 'lucide-react';
+import { Download, Trash2, Edit3, UploadCloud, Loader2, Eye } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -14,6 +14,8 @@ import { handleUploadImageToS3 } from '@/app/actions';
 import { loadS3Config, type S3Config } from '@/lib/s3-config';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+
 
 interface ImageCardProps {
   image: GeneratedImage;
@@ -42,6 +44,7 @@ const ImageCard: FC<ImageCardProps> = ({ image, onDelete, onStartRefine, onUpdat
   const [editableName, setEditableName] = useState(image.name || '');
   const [isUploadingToS3, setIsUploadingToS3] = useState(false);
   const { toast } = useToast();
+  const router = useRouter();
 
   useEffect(() => {
     setEditableName(image.name || '');
@@ -51,9 +54,9 @@ const ImageCard: FC<ImageCardProps> = ({ image, onDelete, onStartRefine, onUpdat
     const finalName = editableName.trim();
     if (finalName !== image.name) {
       onUpdateName(image.id, finalName);
-      if(finalName) { // Only toast if a name was actually set
+      if(finalName) { 
         toast({ title: "Image Renamed", description: `Image name set to: ${finalName}` });
-      } else if (image.name && !finalName) { // Toast if name was cleared
+      } else if (image.name && !finalName) { 
         toast({ title: "Image Name Cleared", description: "Image name has been cleared." });
       }
     }
@@ -63,7 +66,7 @@ const ImageCard: FC<ImageCardProps> = ({ image, onDelete, onStartRefine, onUpdat
   const handleDownload = async () => {
     const currentName = editableName.trim();
     if (!currentName) {
-      toast({ title: "Имя файла отсутствует", description: "Пожалуйста, укажите имя файла.", variant: "destructive" });
+      toast({ title: "Filename Missing", description: "Please enter a filename to download.", variant: "destructive" });
       return;
     }
 
@@ -137,7 +140,7 @@ const ImageCard: FC<ImageCardProps> = ({ image, onDelete, onStartRefine, onUpdat
     }
 
     const s3Config = loadS3Config();
-    if (!s3Config || !s3Config.accessKeyId || !s3Config.bucketName) {
+    if (!s3Config || !s3Config.url || !s3Config.accessKeyId || !s3Config.secretAccessKey || !s3Config.bucketName) {
       toast({
         title: 'S3 Not Configured',
         description: (
@@ -149,6 +152,7 @@ const ImageCard: FC<ImageCardProps> = ({ image, onDelete, onStartRefine, onUpdat
       });
       return;
     }
+    
 
     if (!image.url.startsWith('data:image')) {
       toast({
@@ -194,8 +198,21 @@ const ImageCard: FC<ImageCardProps> = ({ image, onDelete, onStartRefine, onUpdat
     }
   };
 
+  const handleViewImage = () => {
+    if (image.url) {
+      // Store the image id in session storage to be retrieved by the view page
+      sessionStorage.setItem('viewImageId', image.id);
+      router.push(`/view-image`);
+    } else {
+      toast({ title: "Cannot view image", description: "Image URL is missing.", variant: "destructive"});
+    }
+  };
+
+
   const canRefine = image.url.startsWith('data:');
   const canUploadToS3 = image.url.startsWith('data:image'); 
+  const isValidImageUrl = image.url && (image.url.startsWith('data:') || image.url.startsWith('http'));
+
 
   return (
     <Card className="overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300 flex flex-col group">
@@ -214,7 +231,7 @@ const ImageCard: FC<ImageCardProps> = ({ image, onDelete, onStartRefine, onUpdat
               if (e.key === 'Enter') {
                 e.preventDefault(); 
                 handleNameUpdate(); 
-                (e.target as HTMLInputElement).blur(); // Optionally blur on enter
+                (e.target as HTMLInputElement).blur();
               }
             }}
             className="h-9 text-sm mt-1"
@@ -226,23 +243,34 @@ const ImageCard: FC<ImageCardProps> = ({ image, onDelete, onStartRefine, onUpdat
           {image.prompt.length > 80 ? `${image.prompt.substring(0, 77)}...` : image.prompt}
         </CardTitle>
       </CardHeader>
-      <CardContent className="p-0 mb-2 aspect-square relative">
-        <Image
-          src={image.url}
-          alt={image.alt}
-          fill
-          sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, 33vw"
-          style={{ objectFit: 'cover' }}
-          className="transition-transform duration-300 group-hover:scale-105"
-          data-ai-hint={image.aiHint || 'abstract art'}
-          priority={false}
-          onError={(e) => {
-            e.currentTarget.src = `https://picsum.photos/seed/${encodeURIComponent(image.id)}/512/512?text=Image+Error`;
-          }}
-        />
+      <CardContent className="p-0 aspect-square relative mb-3">
+        <button 
+          onClick={handleViewImage} 
+          className="absolute inset-0 w-full h-full focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 rounded-md"
+          aria-label={`View image for prompt: ${image.prompt}`}
+          disabled={!isValidImageUrl}
+        >
+          <Image
+            src={isValidImageUrl ? image.url : `https://placehold.co/512x512.png?text=Invalid+URL`}
+            alt={image.alt}
+            fill
+            sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, 33vw"
+            style={{ objectFit: 'cover' }}
+            className="transition-transform duration-300 group-hover:scale-105 rounded-t-md"
+            data-ai-hint={image.aiHint || 'abstract art'}
+            priority={false} // Consider true for first few images if performance is critical
+            onError={(e) => {
+              e.currentTarget.src = `https://placehold.co/512x512.png?text=Error+Loading`;
+              e.currentTarget.srcset = "";
+            }}
+          />
+           <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-opacity duration-300 flex items-center justify-center rounded-t-md">
+            <Eye className="w-12 h-12 text-white opacity-0 group-hover:opacity-75 transition-opacity duration-300" />
+          </div>
+        </button>
       </CardContent>
       <CardFooter className="p-2 sm:p-3 mt-auto grid grid-cols-2 sm:grid-cols-4 gap-2">
-        <Button onClick={handleDownload} variant="outline" size="sm" className="w-full">
+        <Button onClick={handleDownload} variant="outline" size="sm" className="w-full" disabled={!isValidImageUrl}>
           <Download className="mr-2 h-4 w-4" />
           Download
         </Button>

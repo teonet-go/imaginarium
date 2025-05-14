@@ -2,6 +2,7 @@ import { Sparkles, Settings } from 'lucide-react';
 import type { FC } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
+import { ThemeToggle } from '@/components/theme-toggle';
 
 const Header: FC = () => {
   return (
@@ -13,11 +14,14 @@ const Header: FC = () => {
             Imaginarium
           </h1>
         </Link>
-        <Button variant="outline" size="icon" asChild>
-          <Link href="/settings" aria-label="Settings">
-            <Settings className="h-5 w-5" />
-          </Link>
-        </Button>
+        <div className="flex items-center gap-2">
+          <ThemeToggle />
+          <Button variant="outline" size="icon" asChild>
+            <Link href="/settings" aria-label="Settings">
+              <Settings className="h-5 w-5" />
+            </Link>
+          </Button>
+        </div>
       </div>
     </header>
   );
