@@ -4,6 +4,7 @@
 import { refinePrompt as refinePromptFlow, type RefinePromptInput, type RefinePromptOutput } from '@/ai/flows/refine-prompt';
 import { generateImage as generateImageAiFlow, type GenerateImageInput, type GenerateImageOutput } from '@/ai/flows/generate-image-flow';
 import { refineImage as refineImageAiFlow, type RefineImageInput, type RefineImageOutput } from '@/ai/flows/refine-image-flow';
+import type { S3Config } from '@/lib/s3-config'; // Import S3Config
 
 export interface GeneratedImage {
   id: string;
@@ -116,3 +117,55 @@ export async function handleRefineExistingImage(originalImage: GeneratedImage, r
   }
 }
 
+export async function handleUploadImageToS3(
+  image: GeneratedImage,
+  s3Config: S3Config
+): Promise<{ success: boolean; message: string; url?: string }> {
+  console.log(`Attempting to upload image "${image.name}" to S3 bucket "${s3Config.bucketName}" in region "${s3Config.region}".`);
+  console.log("Image URL (first 100 chars):", image.url.substring(0,100));
+  console.log("S3 Access Key ID:", s3Config.accessKeyId ? "Provided" : "Missing");
+  // DO NOT log secretAccessKey
+
+  if (!image.url.startsWith('data:image')) {
+    return { success: false, message: 'Image is not a valid data URI and cannot be uploaded.' };
+  }
+
+  if (!s3Config.accessKeyId || !s3Config.secretAccessKey || !s3Config.bucketName || !s3Config.region) {
+     return { success: false, message: 'S3 configuration is incomplete. Please check settings.' };
+  }
+
+  // Placeholder for actual S3 upload logic
+  // In a real app, you would use AWS SDK here.
+  // Example:
+  // const AWS = require('aws-sdk');
+  // const s3 = new AWS.S3({
+  //   accessKeyId: s3Config.accessKeyId,
+  //   secretAccessKey: s3Config.secretAccessKey,
+  //   region: s3Config.region,
+  // });
+  // const base64Data = Buffer.from(image.url.replace(/^data:image\/\w+;base64,/, ""), 'base64');
+  // const type = image.url.split(';')[0].split('/')[1];
+  // const params = {
+  //   Bucket: s3Config.bucketName,
+  //   Key: `${image.name}.${type}`, // Define a key for S3 object
+  //   Body: base64Data,
+  //   ContentEncoding: 'base64',
+  //   ContentType: `image/${type}`,
+  //   ACL: 'public-read', // Optional: if you want the image to be publicly accessible
+  // };
+  // try {
+  //   const { Location } = await s3.upload(params).promise();
+  //   return { success: true, message: 'Image uploaded to S3 successfully!', url: Location };
+  // } catch (error) {
+  //   console.error('S3 Upload Error:', error);
+  //   return { success: false, message: `S3 Upload Failed: ${error.message}` };
+  // }
+
+  // Simulate network delay and success for demo purposes
+  await new Promise(resolve => setTimeout(resolve, 1500)); 
+  const mockS3Url = `https://${s3Config.bucketName}.s3.${s3Config.region}.amazonaws.com/${image.name}`;
+
+
+  // For demo, we'll just return a success message.
+  return { success: true, message: `Image "${image.name}" would be uploaded to S3. (Mock URL: ${mockS3Url})`, url: mockS3Url };
+}

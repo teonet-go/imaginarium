@@ -63,11 +63,10 @@ export default function ImaginariumPage() {
 
   useEffect(() => {
     if (generatedImages.length === 0 && !localStorage.getItem('generatedImagesInitialLoadAttempted')) {
-      // Avoid saving an empty array on initial load if nothing was in local storage
       localStorage.setItem('generatedImagesInitialLoadAttempted', 'true');
       return;
     }
-    if (generatedImages.length > 0 || localStorage.getItem('generatedImagesInitialLoadAttempted')) { // Only save if images exist or if we've tried loading
+    if (generatedImages.length > 0 || localStorage.getItem('generatedImagesInitialLoadAttempted')) { 
       const imagesToPersist = generatedImages.slice(0, MAX_STORED_IMAGES);
       try {
         localStorage.setItem('generatedImages', JSON.stringify(imagesToPersist));
@@ -76,7 +75,7 @@ export default function ImaginariumPage() {
         if (error instanceof DOMException && (error.name === 'QuotaExceededError' || error.code === 22 || (error.message && error.message.toLowerCase().includes('quota')))) {
           toast({
             title: "Local Storage Full",
-            description: "Could not save all recent images as local storage is full. Trying to save just the latest.",
+            description: "Could not save all recent images. Trying to save just the latest.",
             variant: "destructive",
           });
           try {
@@ -89,7 +88,7 @@ export default function ImaginariumPage() {
             console.error("Failed to save even the single latest image after quota error:", fallbackError);
             toast({
               title: "Storage Critically Full",
-              description: "Unable to save any images. Your browser's local storage is critically full. Please clear some space.",
+              description: "Unable to save any images. Please clear some space.",
               variant: "destructive",
             });
           }
@@ -122,9 +121,6 @@ export default function ImaginariumPage() {
         const updatedImage = await handleRefineExistingImage(imageBeingRefined, prompt);
         setGeneratedImages((prevImages) => {
             const newImages = prevImages.map(img => img.id === imageBeingRefined.id ? updatedImage : img);
-            // If the refined image got a new ID, we might need to add it and remove old.
-            // For now, assume handleRefineExistingImage returns an image that should replace the original.
-            // If original ID is not found (e.g. imageBeingRefined was stale), add as new.
             if (!prevImages.find(img => img.id === imageBeingRefined.id)) {
                  return [updatedImage, ...prevImages];
             }
@@ -132,6 +128,7 @@ export default function ImaginariumPage() {
         });
         toast({ title: "Image Updated!", description: "Your refined image has been updated in the gallery." });
         setImageBeingRefined(null); 
+        setPrompt(''); // Clear prompt after successful refinement
       } catch (error) {
         console.error("Error updating image:", error);
         toast({ title: "Update Failed", description: "Something went wrong. Please try again.", variant: "destructive" });
@@ -142,6 +139,7 @@ export default function ImaginariumPage() {
         const newImage = await handleGenerateImage(prompt);
         setGeneratedImages((prevImages) => [newImage, ...prevImages]);
         toast({ title: "Image Generated!", description: "Your new image has been added to the gallery." });
+        setPrompt(''); // Clear prompt after successful generation
       } catch (error) {
         console.error("Error generating image:", error);
         toast({ title: "Generation Failed", description: "Something went wrong. Please try again.", variant: "destructive" });
@@ -196,10 +194,12 @@ export default function ImaginariumPage() {
   };
 
   const handleStartImageRefinement = (imageToRefine: GeneratedImage) => {
-    setPrompt(imageToRefine.prompt);
+    // For refining an existing image, the prompt box should be for refinement instructions,
+    // not pre-filled with the original prompt.
+    setPrompt(''); // Clear prompt or set to a placeholder like "Describe changes..."
     setImageBeingRefined(imageToRefine);
     setRefinedData(null); 
-    toast({ title: "Refining Image", description: "Original prompt loaded. Modify it and click 'Update Image'." });
+    toast({ title: "Refining Image", description: `Enter changes for "${imageToRefine.name}" and click 'Update Image'.` });
     promptFormRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
@@ -216,40 +216,44 @@ export default function ImaginariumPage() {
   return (
     <div className="min-h-screen flex flex-col bg-background">
       <Header />
-      <main className="flex-grow container mx-auto px-4 py-8 max-w-4xl">
-        <div ref={promptFormRef}>
-          <PromptForm
-            prompt={prompt}
-            onPromptChange={handlePromptInputChange}
-            onGenerate={handleGenerateOrUpdateImage}
-            onRefine={handleRefinePromptText}
-            isGenerating={isGenerating}
-            isRefining={isRefiningPrompt}
-            isRefinementMode={!!imageBeingRefined}
-          />
-        </div>
-        
-        <RefinedPromptsDisplay
-          refinedData={refinedData}
-          onSelectPrompt={selectRefinedPrompt}
-          isLoading={isRefiningPrompt}
-        />
+      <main className="flex-grow flex flex-col">
+        <div className="container mx-auto px-4 py-8 max-w-4xl">
+            <div ref={promptFormRef}>
+            <PromptForm
+                prompt={prompt}
+                onPromptChange={handlePromptInputChange}
+                onGenerate={handleGenerateOrUpdateImage}
+                onRefine={handleRefinePromptText}
+                isGenerating={isGenerating}
+                isRefining={isRefiningPrompt}
+                isRefinementMode={!!imageBeingRefined}
+                originalPromptForRefinement={imageBeingRefined?.prompt}
+            />
+            </div>
+            
+            <RefinedPromptsDisplay
+            refinedData={refinedData}
+            onSelectPrompt={selectRefinedPrompt}
+            isLoading={isRefiningPrompt}
+            />
 
-        {generatedImages.length > 0 && (
-          <>
-            <Separator className="my-8" />
-            <h2 className="text-2xl font-semibold mb-6 text-center text-foreground">Your Creations</h2>
-          </>
-        )}
+            {generatedImages.length > 0 && (
+            <>
+                <Separator className="my-8" />
+                <h2 className="text-2xl font-semibold mb-6 text-center text-foreground">Your Creations</h2>
+            </>
+            )}
+        </div>
+        {/* ImageGallery container takes full width below the content above */}
+        <div className="w-full flex-grow"> 
+            <ImageGallery 
+                images={generatedImages} 
+                onDeleteImage={handleDeleteImage}
+                onStartRefineImage={handleStartImageRefinement} 
+                onUpdateImageName={handleUpdateImageName}
+            />
+        </div>
       </main>
-      <div className="w-full"> 
-         <ImageGallery 
-            images={generatedImages} 
-            onDeleteImage={handleDeleteImage}
-            onStartRefineImage={handleStartImageRefinement} 
-            onUpdateImageName={handleUpdateImageName}
-          />
-      </div>
       <footer className="text-center py-6 text-sm text-muted-foreground">
         <p>&copy; {new Date().getFullYear()} Imaginarium. All rights reserved.</p>
       </footer>

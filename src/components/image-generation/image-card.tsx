@@ -3,13 +3,18 @@
 
 import { type FC, useState, useEffect } from 'react';
 import Image from 'next/image';
-import { Download, Trash2, Edit3 } from 'lucide-react';
+import { Download, Trash2, Edit3, UploadCloud, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import type { GeneratedImage } from '@/app/actions';
+import { handleUploadImageToS3 } from '@/app/actions';
+import { loadS3Config, type S3Config } from '@/lib/s3-config';
+import { useToast } from '@/hooks/use-toast';
+import Link from 'next/link';
+
 
 interface ImageCardProps {
   image: GeneratedImage;
@@ -42,10 +47,10 @@ function sanitizeFilenameForDefault(prompt: string, id: string): string {
 
 const ImageCard: FC<ImageCardProps> = ({ image, onDelete, onStartRefine, onUpdateName }) => {
   const [editableName, setEditableName] = useState(image.name || sanitizeFilenameForDefault(image.prompt, image.id));
+  const [isUploadingToS3, setIsUploadingToS3] = useState(false);
+  const { toast } = useToast();
 
   useEffect(() => {
-    // Update local editableName if image.name prop changes from parent
-    // This ensures consistency if the name is updated externally or on initial load
     const defaultName = sanitizeFilenameForDefault(image.prompt, image.id);
     setEditableName(image.name || defaultName);
   }, [image.name, image.prompt, image.id]);
@@ -55,14 +60,13 @@ const ImageCard: FC<ImageCardProps> = ({ image, onDelete, onStartRefine, onUpdat
     if (finalName !== image.name) {
       onUpdateName(image.id, finalName);
     }
-    // Ensure local state reflects the potentially sanitized or defaulted name
     setEditableName(finalName); 
   };
 
   const handleDownload = async () => {
     if (!image.url) {
       console.error('Image URL is missing.');
-      // Optionally, show a toast to the user
+      toast({ title: "Download Error", description: "Image URL is missing.", variant: "destructive" });
       return;
     }
     try {
@@ -83,13 +87,11 @@ const ImageCard: FC<ImageCardProps> = ({ image, onDelete, onStartRefine, onUpdat
         document.body.removeChild(link);
         window.URL.revokeObjectURL(objectUrl);
       } else {
-        // For regular URLs, attempt to download
         const link = document.createElement('a');
-        
-        let extension = '.png'; // Default extension
+        let extension = '.png'; 
         const lastDotIndex = image.url.lastIndexOf('.');
         const lastSlashIndex = image.url.lastIndexOf('/');
-        if (lastDotIndex > -1 && lastDotIndex > lastSlashIndex) { // Ensure dot is part of filename not path
+        if (lastDotIndex > -1 && lastDotIndex > lastSlashIndex) { 
             const possibleExt = image.url.substring(lastDotIndex).toLowerCase();
             const commonImageExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg'];
             if (commonImageExtensions.includes(possibleExt)) {
@@ -99,14 +101,15 @@ const ImageCard: FC<ImageCardProps> = ({ image, onDelete, onStartRefine, onUpdat
         filenameWithExtension = baseFilename + extension;
         link.href = image.url;
         link.download = filenameWithExtension; 
-        link.target = '_blank'; // Open in new tab as fallback if direct download fails
+        link.target = '_blank'; 
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
       }
+      toast({ title: "Download Started", description: `Downloading ${filenameWithExtension}` });
     } catch (error) {
       console.error('Error downloading image:', error);
-      // Fallback for any error: try to open in new tab
+      toast({ title: "Download Failed", description: "Could not download image.", variant: "destructive" });
       if (image.url) {
         window.open(image.url, '_blank');
       }
@@ -118,12 +121,73 @@ const ImageCard: FC<ImageCardProps> = ({ image, onDelete, onStartRefine, onUpdat
   };
 
   const handleStartRefine = () => {
-    if (image.url.startsWith('data:')) { // Only allow refining data URIs (AI-generated)
+    if (image.url.startsWith('data:')) { 
       onStartRefine(image);
     }
   };
 
+  const handleS3Upload = async () => {
+    const s3Config = loadS3Config();
+    if (!s3Config || !s3Config.accessKeyId || !s3Config.bucketName) {
+      toast({
+        title: 'S3 Not Configured',
+        description: (
+          <p>
+            Please <Link href="/settings" className="underline hover:text-primary">configure your S3 settings</Link> first.
+          </p>
+        ),
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (!image.url.startsWith('data:image')) {
+      toast({
+        title: 'Upload Error',
+        description: 'Only generated images (data URIs) can be uploaded to S3.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    
+    setIsUploadingToS3(true);
+    toast({ title: 'Uploading to S3...', description: `Sending "${image.name}" to your S3 bucket.` });
+
+    try {
+      // Ensure the image name is up-to-date for upload
+      const currentImageWithPotentiallyUpdatedName = { ...image, name: editableName.trim() || sanitizeFilenameForDefault(image.prompt, image.id) };
+      const result = await handleUploadImageToS3(currentImageWithPotentiallyUpdatedName, s3Config);
+      if (result.success) {
+        toast({
+          title: 'S3 Upload Successful',
+          description: result.message,
+          action: result.url ? (
+            <Button variant="outline" size="sm" asChild>
+              <a href={result.url} target="_blank" rel="noopener noreferrer">View on S3</a>
+            </Button>
+          ) : undefined,
+        });
+      } else {
+        toast({
+          title: 'S3 Upload Failed',
+          description: result.message,
+          variant: 'destructive',
+        });
+      }
+    } catch (error: any) {
+      console.error('Error uploading to S3:', error);
+      toast({
+        title: 'S3 Upload Error',
+        description: error.message || 'An unexpected error occurred during S3 upload.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsUploadingToS3(false);
+    }
+  };
+
   const canRefine = image.url.startsWith('data:');
+  const canUploadToS3 = image.url.startsWith('data:image'); // More specific check for S3
 
   return (
     <Card className="overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300 flex flex-col group">
@@ -140,7 +204,7 @@ const ImageCard: FC<ImageCardProps> = ({ image, onDelete, onStartRefine, onUpdat
             onBlur={handleNameUpdate}
             onKeyDown={(e) => { 
               if (e.key === 'Enter') {
-                e.preventDefault(); // Prevent form submission if any
+                e.preventDefault(); 
                 handleNameUpdate(); 
               }
             }}
@@ -157,32 +221,66 @@ const ImageCard: FC<ImageCardProps> = ({ image, onDelete, onStartRefine, onUpdat
         <Image
           src={image.url}
           alt={image.alt}
-          fill // Replaces layout="fill" objectFit="cover"
-          sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, 33vw" // Example sizes, adjust as needed
-          style={{ objectFit: 'cover' }} // Used with fill
+          fill
+          sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, 33vw"
+          style={{ objectFit: 'cover' }}
           className="transition-transform duration-300 group-hover:scale-105"
           data-ai-hint={image.aiHint || 'abstract art'}
-          priority={false} // Set to true for above-the-fold images
+          priority={false}
           onError={(e) => {
-            // Fallback for broken image URLs
             e.currentTarget.src = `https://picsum.photos/seed/${encodeURIComponent(image.id)}/512/512?text=Image+Error`;
           }}
         />
       </CardContent>
-      <CardFooter className="p-2 sm:p-3 mt-auto flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
-        <Button onClick={handleDownload} variant="outline" size="sm" className="flex-1 w-full sm:w-auto">
+      <CardFooter className="p-2 sm:p-3 mt-auto grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <Button onClick={handleDownload} variant="outline" size="sm" className="w-full">
           <Download className="mr-2 h-4 w-4" />
           Download
         </Button>
+        
         <TooltipProvider>
           <Tooltip delayDuration={300}>
             <TooltipTrigger asChild>
-              <span tabIndex={canRefine ? -1 : 0} className="flex-1 w-full sm:w-auto">
+              <span tabIndex={isUploadingToS3 || !canUploadToS3 ? 0 : -1} className="w-full">
+                <Button 
+                  onClick={handleS3Upload} 
+                  variant="outline" 
+                  size="sm" 
+                  className="w-full"
+                  disabled={isUploadingToS3 || !canUploadToS3}
+                  aria-label={canUploadToS3 ? "Upload to S3" : "Cannot upload this image type to S3"}
+                >
+                  {isUploadingToS3 ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <UploadCloud className="mr-2 h-4 w-4" />
+                  )}
+                  S3
+                </Button>
+              </span>
+            </TooltipTrigger>
+            {(!canUploadToS3 && !isUploadingToS3) && (
+              <TooltipContent>
+                <p>Only AI-generated images (not placeholders/errors) can be uploaded to S3.</p>
+              </TooltipContent>
+            )}
+             {isUploadingToS3 && (
+              <TooltipContent>
+                <p>Uploading to S3 in progress...</p>
+              </TooltipContent>
+            )}
+          </Tooltip>
+        </TooltipProvider>
+
+        <TooltipProvider>
+          <Tooltip delayDuration={300}>
+            <TooltipTrigger asChild>
+              <span tabIndex={canRefine ? -1 : 0} className="w-full">
                  <Button 
                     onClick={handleStartRefine} 
                     variant="outline" 
                     size="sm" 
-                    className="flex-1 w-full"
+                    className="w-full"
                     disabled={!canRefine}
                     aria-label={canRefine ? "Refine this image" : "Cannot refine placeholder/error images"}
                   >
@@ -198,7 +296,8 @@ const ImageCard: FC<ImageCardProps> = ({ image, onDelete, onStartRefine, onUpdat
             )}
           </Tooltip>
         </TooltipProvider>
-        <Button onClick={handleDelete} variant="destructive" size="sm" className="flex-1 w-full sm:w-auto">
+
+        <Button onClick={handleDelete} variant="destructive" size="sm" className="w-full">
           <Trash2 className="mr-2 h-4 w-4" />
           Delete
         </Button>
