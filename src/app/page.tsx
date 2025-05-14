@@ -36,14 +36,13 @@ export default function ImaginariumPage() {
         const parsedImages: Partial<GeneratedImage>[] = JSON.parse(storedImages);
         if (Array.isArray(parsedImages)) {
            const validatedImages = parsedImages.map(img => {
-             const id = img.id || `${Date.now()}-${Math.random()}`;
+             // Ensure ID is valid and not the string "undefined"
+             const id = (img.id && img.id !== "undefined") ? img.id : `${Date.now()}-${Math.random().toString(36).substring(2, 15)}`;
              const currentPrompt = img.prompt || 'Untitled Prompt';
-             // If img.name is explicitly set (even to empty string), use it.
-             // If img.name is undefined/null (from very old stored data), default to empty string.
              const name = (typeof img.name === 'string') ? img.name : '';
              return {
                id,
-               url: img.url || `https://picsum.photos/seed/${encodeURIComponent(id)}/512/512?text=Invalid+Image`,
+               url: img.url || `https://placehold.co/512x512.png?text=Invalid+Image&seed=${encodeURIComponent(id)}`,
                prompt: currentPrompt,
                alt: img.alt || `Image for prompt: ${currentPrompt}`,
                name: name,
