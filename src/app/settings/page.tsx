@@ -9,7 +9,7 @@ import { ArrowLeft } from 'lucide-react';
 
 export const metadata: Metadata = {
   title: 'Settings - Imaginarium',
-  description: 'Configure S3 settings for image uploads.',
+  description: 'Configure S3-compatible storage settings for image uploads.',
 };
 
 export default function SettingsPage() {
@@ -27,9 +27,10 @@ export default function SettingsPage() {
         </div>
         <Card className="shadow-lg">
           <CardHeader>
-            <CardTitle className="text-2xl">S3 Storage Settings</CardTitle>
+            <CardTitle className="text-2xl">S3-Compatible Storage Settings</CardTitle>
             <CardDescription>
-              Configure your AWS S3 bucket details to enable uploading generated images.
+              Configure your S3-compatible bucket details (e.g., MinIO) to enable uploading generated images.
+              This includes Access Key, Secret Key, Bucket Name, and an optional Path Prefix.
               These settings are stored locally in your browser.
             </CardDescription>
           </CardHeader>

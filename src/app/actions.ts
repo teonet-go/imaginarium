@@ -4,7 +4,7 @@
 import { refinePrompt as refinePromptFlow, type RefinePromptInput, type RefinePromptOutput } from '@/ai/flows/refine-prompt';
 import { generateImage as generateImageAiFlow, type GenerateImageInput, type GenerateImageOutput } from '@/ai/flows/generate-image-flow';
 import { refineImage as refineImageAiFlow, type RefineImageInput, type RefineImageOutput } from '@/ai/flows/refine-image-flow';
-import type { S3Config } from '@/lib/s3-config'; // Import S3Config
+import type { S3Config } from '@/lib/s3-config'; // S3Config now has prefix instead of region
 
 export interface GeneratedImage {
   id: string;
@@ -121,7 +121,7 @@ export async function handleUploadImageToS3(
   image: GeneratedImage,
   s3Config: S3Config
 ): Promise<{ success: boolean; message: string; url?: string }> {
-  console.log(`Attempting to upload image "${image.name}" to S3 bucket "${s3Config.bucketName}" in region "${s3Config.region}".`);
+  console.log(`Attempting to upload image "${image.name}" to S3 bucket "${s3Config.bucketName}" with prefix "${s3Config.prefix}".`);
   console.log("Image URL (first 100 chars):", image.url.substring(0,100));
   console.log("S3 Access Key ID:", s3Config.accessKeyId ? "Provided" : "Missing");
   // DO NOT log secretAccessKey
@@ -130,42 +130,62 @@ export async function handleUploadImageToS3(
     return { success: false, message: 'Image is not a valid data URI and cannot be uploaded.' };
   }
 
-  if (!s3Config.accessKeyId || !s3Config.secretAccessKey || !s3Config.bucketName || !s3Config.region) {
-     return { success: false, message: 'S3 configuration is incomplete. Please check settings.' };
+  if (!s3Config.accessKeyId || !s3Config.secretAccessKey || !s3Config.bucketName) { // prefix is optional for path, but these are mandatory
+     return { success: false, message: 'S3 configuration (Access Key, Secret Key, Bucket Name) is incomplete. Please check settings.' };
   }
 
   // Placeholder for actual S3 upload logic
-  // In a real app, you would use AWS SDK here.
-  // Example:
+  // In a real app, you would use an S3 SDK (e.g., aws-sdk or a MinIO specific one if preferred).
+  // Example structure for aws-sdk with MinIO (often compatible):
   // const AWS = require('aws-sdk');
   // const s3 = new AWS.S3({
   //   accessKeyId: s3Config.accessKeyId,
   //   secretAccessKey: s3Config.secretAccessKey,
-  //   region: s3Config.region,
+  //   endpoint: 'YOUR_MINIO_ENDPOINT_URL', // e.g., 'http://localhost:9000'
+  //   s3ForcePathStyle: true, // Important for MinIO
+  //   signatureVersion: 'v4',
   // });
   // const base64Data = Buffer.from(image.url.replace(/^data:image\/\w+;base64,/, ""), 'base64');
-  // const type = image.url.split(';')[0].split('/')[1];
+  // const typeMatch = image.url.match(/^data:image\/(\w+);base64,/);
+  // const type = typeMatch ? typeMatch[1] : 'png';
+  //
+  // let s3Key = image.name;
+  // if (s3Config.prefix) {
+  //    const normalizedPrefix = s3Config.prefix.endsWith('/') ? s3Config.prefix : `${s3Config.prefix}/`;
+  //    s3Key = `${normalizedPrefix}${image.name}`;
+  // }
+  // s3Key = `${s3Key}.${type}`; // Add extension to the S3 key
+  //
   // const params = {
   //   Bucket: s3Config.bucketName,
-  //   Key: `${image.name}.${type}`, // Define a key for S3 object
+  //   Key: s3Key,
   //   Body: base64Data,
   //   ContentEncoding: 'base64',
   //   ContentType: `image/${type}`,
-  //   ACL: 'public-read', // Optional: if you want the image to be publicly accessible
+  //   // ACL: 'public-read', // Optional: if you want the image to be publicly accessible - check MinIO policies
   // };
   // try {
-  //   const { Location } = await s3.upload(params).promise();
-  //   return { success: true, message: 'Image uploaded to S3 successfully!', url: Location };
+  //   const { Location } = await s3.upload(params).promise(); // Location might not be standard for all S3-likes
+  //   // For MinIO, you might construct the URL yourself if Location is not returned/reliable
+  //   const uploadedUrl = Location || `YOUR_MINIO_ENDPOINT_URL/${s3Config.bucketName}/${s3Key}`;
+  //   return { success: true, message: 'Image uploaded to S3 successfully!', url: uploadedUrl };
   // } catch (error) {
   //   console.error('S3 Upload Error:', error);
   //   return { success: false, message: `S3 Upload Failed: ${error.message}` };
   // }
 
-  // Simulate network delay and success for demo purposes
   await new Promise(resolve => setTimeout(resolve, 1500)); 
-  const mockS3Url = `https://${s3Config.bucketName}.s3.${s3Config.region}.amazonaws.com/${image.name}`;
+  
+  let s3ObjectKey = image.name;
+  if (s3Config.prefix) {
+     const normalizedPrefix = s3Config.prefix.endsWith('/') || s3Config.prefix === '' ? s3Config.prefix : `${s3Config.prefix}/`;
+     s3ObjectKey = `${normalizedPrefix}${image.name}`;
+  }
+  const typeMatch = image.url.match(/^data:image\/(\w+);base64,/);
+  const extension = typeMatch ? typeMatch[1] : 'png';
 
 
-  // For demo, we'll just return a success message.
-  return { success: true, message: `Image "${image.name}" would be uploaded to S3. (Mock URL: ${mockS3Url})`, url: mockS3Url };
+  const mockS3Url = `s3://${s3Config.bucketName}/${s3ObjectKey}.${extension}`; // Generic S3 path
+
+  return { success: true, message: `Image "${image.name}" would be uploaded to S3. (Mock Path: ${mockS3Url})`, url: mockS3Url };
 }

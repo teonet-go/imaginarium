@@ -13,7 +13,7 @@ const initialS3Config: S3Config = {
   accessKeyId: '',
   secretAccessKey: '',
   bucketName: '',
-  region: '',
+  prefix: '', // Changed from region
 };
 
 export default function S3SettingsForm() {
@@ -83,26 +83,26 @@ export default function S3SettingsForm() {
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       <div>
-        <Label htmlFor="accessKeyId">AWS Access Key ID</Label>
+        <Label htmlFor="accessKeyId">Access Key ID</Label>
         <Input
           id="accessKeyId"
           name="accessKeyId"
           type="text"
           value={s3Config.accessKeyId}
           onChange={handleChange}
-          placeholder="Your AWS Access Key ID"
+          placeholder="Your Access Key ID"
           className="mt-1"
         />
       </div>
       <div>
-        <Label htmlFor="secretAccessKey">AWS Secret Access Key</Label>
+        <Label htmlFor="secretAccessKey">Secret Access Key</Label>
         <Input
           id="secretAccessKey"
           name="secretAccessKey"
           type="password"
           value={s3Config.secretAccessKey}
           onChange={handleChange}
-          placeholder="Your AWS Secret Access Key"
+          placeholder="Your Secret Access Key"
           className="mt-1"
         />
       </div>
@@ -119,14 +119,14 @@ export default function S3SettingsForm() {
         />
       </div>
       <div>
-        <Label htmlFor="region">AWS Region</Label>
+        <Label htmlFor="prefix">S3 Path Prefix (Optional)</Label>
         <Input
-          id="region"
-          name="region"
+          id="prefix"
+          name="prefix" // Changed from region to prefix
           type="text"
-          value={s3Config.region}
+          value={s3Config.prefix}
           onChange={handleChange}
-          placeholder="e.g., us-east-1"
+          placeholder="e.g., images/generated/"
           className="mt-1"
         />
       </div>

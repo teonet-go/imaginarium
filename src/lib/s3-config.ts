@@ -5,7 +5,7 @@ export interface S3Config {
   accessKeyId: string;
   secretAccessKey: string;
   bucketName: string;
-  region: string;
+  prefix: string; // Changed from region to prefix
 }
 
 const S3_CONFIG_KEY = 's3ImaginariumConfig'; // Unique key for this app
@@ -27,7 +27,14 @@ export function loadS3Config(): S3Config | null {
     const storedConfig = localStorage.getItem(S3_CONFIG_KEY);
     if (storedConfig) {
       try {
-        return JSON.parse(storedConfig) as S3Config;
+        // Ensure default for prefix if it's missing from old stored config
+        const parsedConfig = JSON.parse(storedConfig) as Partial<S3Config>;
+        return {
+          accessKeyId: parsedConfig.accessKeyId || '',
+          secretAccessKey: parsedConfig.secretAccessKey || '',
+          bucketName: parsedConfig.bucketName || '',
+          prefix: parsedConfig.prefix || '', // Provide default for prefix
+        };
       } catch (e) {
         console.error("Error parsing S3 config from localStorage", e);
         // Corrupted data, remove it
