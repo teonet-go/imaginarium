@@ -1,7 +1,12 @@
 
 // src/lib/firebase.ts
 import { initializeApp, getApps, type FirebaseApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, EmailAuthProvider } from 'firebase/auth';
+import { 
+  getAuth, 
+  GoogleAuthProvider, 
+  EmailAuthProvider, 
+  sendPasswordResetEmail // Ensure this is imported, though used in login page
+} from 'firebase/auth';
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -23,6 +28,7 @@ if (!getApps().length) {
 
 const auth = getAuth(app);
 const googleProvider = new GoogleAuthProvider();
-const emailProvider = new EmailAuthProvider(); // Though not directly used like Google's, it's good to be aware of
+const emailProvider = new EmailAuthProvider(); 
 
-export { app, auth, googleProvider, emailProvider };
+export { app, auth, googleProvider, emailProvider, sendPasswordResetEmail };
+
