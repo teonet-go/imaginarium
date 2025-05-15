@@ -223,6 +223,19 @@ export default function ImaginariumPage() {
     return <LoadingSpinner text="Authenticating..." />;
   }
 
+  const getUserDisplayInfo = () => {
+    if (user) {
+      if (user.displayName) {
+        return user.displayName;
+      }
+      if (user.email) {
+        return user.email.split('@')[0];
+      }
+    }
+    return null;
+  };
+  const userDisplayInfo = getUserDisplayInfo();
+
   return (
     <div className="min-h-screen flex flex-col bg-background">
       <Header />
@@ -264,8 +277,10 @@ export default function ImaginariumPage() {
         </div>
       </main>
       <footer className="text-center py-6 text-sm text-muted-foreground">
-        <p>&copy; {new Date().getFullYear()} Imaginarium. All rights reserved. User: {user?.email || user?.displayName}</p>
+        <p>&copy; {new Date().getFullYear()} Imaginarium. All rights reserved.</p>
+        {userDisplayInfo && <p>User: {userDisplayInfo}</p>}
       </footer>
     </div>
   );
 }
+
