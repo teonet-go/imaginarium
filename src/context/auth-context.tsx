@@ -10,6 +10,7 @@ import {
   signInWithPopup, 
   createUserWithEmailAndPassword, 
   signInWithEmailAndPassword,
+  sendEmailVerification, // Import sendEmailVerification
   type User as FirebaseUser,
   type AuthError
 } from 'firebase/auth';
@@ -51,6 +52,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         case 'auth/wrong-password':
             message = 'Invalid email or password.';
             break;
+        case 'auth/invalid-credential': // Can be due to wrong password or sometimes unverified email with enumeration protection
+            message = 'Invalid credentials. If you recently signed up, please check your email for a verification link.';
+            break;
         case 'auth/email-already-in-use':
             message = 'This email is already in use.';
             break;
@@ -63,6 +67,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         case 'auth/cancelled-popup-request':
              message = 'Google Sign-In was cancelled. Please try again.';
              break;
+        case 'auth/operation-not-allowed':
+            message = 'Email/password accounts are not enabled. Please contact support.';
+            break;
         default:
             message = error.message || defaultMessage;
     }
@@ -85,7 +92,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setLoading(true);
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
-      // onAuthStateChanged will handle setting user
+      if (userCredential.user) {
+        await sendEmailVerification(userCredential.user);
+        toast({
+          title: 'Sign-up Successful!',
+          description: 'A verification email has been sent. Please check your inbox and verify your account before signing in.',
+          duration: 9000, // Longer duration for this important message
+        });
+        // Don't automatically sign in the user, they need to verify first.
+        // await signOut(auth); // Optionally sign them out until they verify
+        // setUser(null); 
+      }
+      // onAuthStateChanged will eventually reflect the new user state, but emailVerified will be false.
+      setLoading(false); // Set loading false here as auth state change might be quick
       return userCredential.user;
     } catch (error) {
       handleAuthError(error as AuthError, 'Could not sign up with email.');
@@ -98,7 +117,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setLoading(true);
     try {
       const userCredential = await signInWithEmailAndPassword(auth, email, pass);
-      // onAuthStateChanged will handle setting user
+      if (userCredential.user && !userCredential.user.emailVerified) {
+        toast({
+          title: 'Email Not Verified',
+          description: 'Please verify your email address before signing in. Check your inbox for the verification link.',
+          variant: 'destructive',
+          duration: 9000,
+        });
+        await signOut(auth); // Sign out the user as they are not verified
+        setLoading(false);
+        return null;
+      }
+      // onAuthStateChanged will handle setting user if email is verified
       return userCredential.user;
     } catch (error) {
       handleAuthError(error as AuthError, 'Could not sign in with email.');
