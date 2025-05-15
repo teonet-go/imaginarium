@@ -1,14 +1,18 @@
+
 // src/app/view-image/[imageId]/view-image-client.tsx
 'use client';
 
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Download, Maximize, Minimize, RotateCcw, ZoomIn, ZoomOut } from 'lucide-react';
 import type { GeneratedImage } from '@/app/actions';
 import { useToast } from '@/hooks/use-toast';
 import Header from '@/components/layout/header';
+import { useAuth } from '@/context/auth-context';
+import LoadingSpinner from '@/components/layout/loading-spinner';
 
 const MAX_IMAGE_DISPLAY_WIDTH = 1024;
 const MAX_IMAGE_DISPLAY_HEIGHT = 768;
@@ -18,7 +22,7 @@ export default function ViewImageClient({ params }: { params: { imageId: string 
   const [isLoading, setIsLoading] = useState(true);
   const [imageStyle, setImageStyle] = useState<React.CSSProperties>({
     maxWidth: '100%',
-    maxHeight: 'calc(100vh - 200px)', // Adjusted for header/footer/padding
+    maxHeight: 'calc(100vh - 200px)',
     objectFit: 'contain',
     cursor: 'zoom-in',
     transition: 'transform 0.2s ease-out',
@@ -27,24 +31,34 @@ export default function ViewImageClient({ params }: { params: { imageId: string 
   const [scale, setScale] = useState(1);
   const [rotation, setRotation] = useState(0);
 
-
   const { toast } = useToast();
-  const { imageId } = params;
+  const { imageId: encodedImageIdFromParam } = params; // Renamed to avoid conflict
+  const router = useRouter();
+  const { user, loading: authLoading } = useAuth();
 
   useEffect(() => {
-    if (imageId) {
-      const decodedImageId = decodeURIComponent(imageId);
-      const storedImagesRaw = localStorage.getItem('generatedImages');
+    if (!authLoading && !user) {
+      router.push('/login');
+    }
+  }, [user, authLoading, router]);
+
+  useEffect(() => {
+    if (user && encodedImageIdFromParam) { // Only proceed if user is authenticated and imageId exists
+      const decodedImageId = decodeURIComponent(encodedImageIdFromParam);
+      const storedImagesRaw = localStorage.getItem(`generatedImages_${user.uid}`);
       if (storedImagesRaw) {
         try {
           const storedImages: GeneratedImage[] = JSON.parse(storedImagesRaw);
           const foundImage = storedImages.find(img => img.id === decodedImageId);
           if (foundImage) {
             setImage(foundImage);
+             if (typeof window !== 'undefined') {
+                 document.title = `View: ${foundImage.name || decodedImageId.substring(0,20)}... - Imaginarium`;
+             }
           } else {
             toast({
               title: 'Image Not Found',
-              description: `Image with ID "${decodedImageId}" not found in local storage.`,
+              description: `Image with ID "${decodedImageId}" not found.`,
               variant: 'destructive',
             });
           }
@@ -63,15 +77,15 @@ export default function ViewImageClient({ params }: { params: { imageId: string 
             variant: 'destructive',
           });
       }
-    } else {
-      toast({
-        title: 'No Image ID Provided',
-        description: 'The URL does not specify an image to view.',
-        variant: 'destructive',
-      });
+    } else if (user && !encodedImageIdFromParam) { // User is auth but no imageId
+        toast({
+            title: 'No Image ID Provided',
+            description: 'The URL does not specify an image to view.',
+            variant: 'destructive',
+        });
     }
-    setIsLoading(false);
-  }, [imageId, toast]);
+    setIsLoading(false); // Set loading to false after checks or if user is not auth yet (authLoading will handle UI)
+  }, [encodedImageIdFromParam, toast, user, authLoading]); // Add authLoading to dependencies
 
   const handleDownload = async () => {
     if (!image || !image.url) {
@@ -89,7 +103,7 @@ export default function ViewImageClient({ params }: { params: { imageId: string 
       const objectUrl = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       
-      let extension = '.png'; // Default extension
+      let extension = '.png';
       const mimeTypeMatch = image.url.match(/^data:(image\/[a-z+.-]+);base64,/);
       if (mimeTypeMatch && mimeTypeMatch[1]) {
         const mimeType = mimeTypeMatch[1];
@@ -100,7 +114,7 @@ export default function ViewImageClient({ params }: { params: { imageId: string 
             case 'image/gif': extension = '.gif'; break;
             case 'image/webp': extension = '.webp'; break;
         }
-      } else { // Fallback for non-data URLs, try to get from URL
+      } else { 
         const urlParts = image.url.split('.');
         if (urlParts.length > 1) {
             const ext = urlParts.pop()?.toLowerCase();
@@ -135,13 +149,13 @@ export default function ViewImageClient({ params }: { params: { imageId: string 
   };
   
   const handleZoomIn = () => {
-    const newScale = Math.min(scale * 1.2, 3); // Max zoom 3x
+    const newScale = Math.min(scale * 1.2, 3); 
     setScale(newScale);
     setImageStyle(prev => ({ ...prev, transform: `scale(${newScale}) rotate(${rotation}deg)`}));
   };
 
   const handleZoomOut = () => {
-    const newScale = Math.max(scale / 1.2, 0.5); // Min zoom 0.5x
+    const newScale = Math.max(scale / 1.2, 0.5);
     setScale(newScale);
     setImageStyle(prev => ({ ...prev, transform: `scale(${newScale}) rotate(${rotation}deg)`}));
   };
@@ -168,19 +182,23 @@ export default function ViewImageClient({ params }: { params: { imageId: string 
     }));
   };
 
-
-  if (isLoading) {
+  if (authLoading || !user) {
+    return <LoadingSpinner text="Authenticating..." />;
+  }
+  
+  if (isLoading && !image) { // Show loading spinner for image data only if auth is complete and user exists
     return (
-      <div className="min-h-screen flex flex-col bg-background">
-        <Header />
-        <main className="flex-grow container mx-auto px-4 py-8 flex items-center justify-center">
-          <p className="text-xl text-muted-foreground">Loading image...</p>
-        </main>
-      </div>
+        <div className="min-h-screen flex flex-col bg-background">
+            <Header />
+            <main className="flex-grow container mx-auto px-4 py-8 flex items-center justify-center">
+            <LoadingSpinner text="Loading image..." fullScreen={false} />
+            </main>
+        </div>
     );
   }
 
-  if (!image) {
+
+  if (!image) { // This implies image wasn't found or an error occurred after auth.
     return (
       <div className="min-h-screen flex flex-col bg-background">
         <Header />
@@ -195,7 +213,7 @@ export default function ViewImageClient({ params }: { params: { imageId: string 
             </div>
             <div className="text-center py-10">
                 <p className="text-2xl font-semibold text-destructive">Image Not Found</p>
-                <p className="text-muted-foreground mt-2">The requested image (ID: {decodeURIComponent(imageId)}) could not be displayed.</p>
+                <p className="text-muted-foreground mt-2">The requested image (ID: {decodeURIComponent(encodedImageIdFromParam)}) could not be displayed.</p>
             </div>
         </main>
       </div>
@@ -251,8 +269,9 @@ export default function ViewImageClient({ params }: { params: { imageId: string 
                 priority 
                 unoptimized={image.url.startsWith('data:')} 
                 onError={(e) => {
-                    e.currentTarget.src = `https://placehold.co/600x400.png?text=Error+Loading`;
-                    e.currentTarget.srcset = "";
+                    const target = e.target as HTMLImageElement;
+                    target.src = `https://placehold.co/600x400.png?text=Error+Loading`;
+                    target.srcset = "";
                     toast({ title: "Error loading image", description: "The image source seems to be invalid.", variant: "destructive" });
                 }}
               />

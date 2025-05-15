@@ -1,7 +1,9 @@
+
 // src/app/page.tsx
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import Header from '@/components/layout/header';
 import PromptForm from '@/components/image-generation/prompt-form';
 import RefinedPromptsDisplay from '@/components/image-generation/refined-prompts-display';
@@ -15,6 +17,8 @@ import {
 import type { RefinePromptOutput } from '@/ai/flows/refine-prompt';
 import { useToast } from "@/hooks/use-toast";
 import { Separator } from '@/components/ui/separator';
+import { useAuth } from '@/context/auth-context'; // Import useAuth
+import LoadingSpinner from '@/components/layout/loading-spinner'; // Import LoadingSpinner
 
 const MAX_STORED_IMAGES = 10; 
 
@@ -29,44 +33,53 @@ export default function ImaginariumPage() {
   const { toast } = useToast();
   const promptFormRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    const storedImages = localStorage.getItem('generatedImages');
-    if (storedImages) {
-      try {
-        const parsedImages: Partial<GeneratedImage>[] = JSON.parse(storedImages);
-        if (Array.isArray(parsedImages)) {
-           const validatedImages = parsedImages.map(img => {
-             // Ensure ID is valid and not the string "undefined"
-             const id = (img.id && img.id !== "undefined") ? img.id : `${Date.now()}-${Math.random().toString(36).substring(2, 15)}`;
-             const currentPrompt = img.prompt || 'Untitled Prompt';
-             const name = (typeof img.name === 'string') ? img.name : '';
-             return {
-               id,
-               url: img.url || `https://placehold.co/512x512.png?text=Invalid+Image&seed=${encodeURIComponent(id)}`,
-               prompt: currentPrompt,
-               alt: img.alt || `Image for prompt: ${currentPrompt}`,
-               name: name,
-               aiHint: img.aiHint
-             };
-           }) as GeneratedImage[];
-           setGeneratedImages(validatedImages);
-        }
-      } catch (error) {
-        console.error("Error parsing images from local storage:", error);
-        localStorage.removeItem('generatedImages'); 
-      }
-    }
-  }, []);
+  const { user, loading: authLoading } = useAuth(); // Get user and loading state
+  const router = useRouter();
 
   useEffect(() => {
-    if (generatedImages.length === 0 && !localStorage.getItem('generatedImagesInitialLoadAttempted')) {
-      localStorage.setItem('generatedImagesInitialLoadAttempted', 'true');
-      return;
+    if (!authLoading && !user) {
+      router.push('/login'); // Redirect to login if not authenticated
     }
-    if (generatedImages.length > 0 || localStorage.getItem('generatedImagesInitialLoadAttempted')) { 
+  }, [user, authLoading, router]);
+
+  useEffect(() => {
+    if (user) { // Only load/save images if user is logged in
+      const storedImages = localStorage.getItem(`generatedImages_${user.uid}`);
+      if (storedImages) {
+        try {
+          const parsedImages: Partial<GeneratedImage>[] = JSON.parse(storedImages);
+          if (Array.isArray(parsedImages)) {
+             const validatedImages = parsedImages.map(img => {
+               const id = (img.id && img.id !== "undefined") ? img.id : `${Date.now()}-${Math.random().toString(36).substring(2, 15)}`;
+               const currentPrompt = img.prompt || 'Untitled Prompt';
+               const name = (typeof img.name === 'string') ? img.name : '';
+               return {
+                 id,
+                 url: img.url || `https://placehold.co/512x512.png?text=Invalid+Image&seed=${encodeURIComponent(id)}`,
+                 prompt: currentPrompt,
+                 alt: img.alt || `Image for prompt: ${currentPrompt}`,
+                 name: name,
+                 aiHint: img.aiHint
+               };
+             }) as GeneratedImage[];
+             setGeneratedImages(validatedImages);
+          }
+        } catch (error) {
+          console.error("Error parsing images from local storage:", error);
+          localStorage.removeItem(`generatedImages_${user.uid}`); 
+        }
+      }
+    }
+  }, [user]); // Depend on user to load images specific to them
+
+  useEffect(() => {
+    if (user && (generatedImages.length > 0 || localStorage.getItem(`generatedImagesInitialLoadAttempted_${user.uid}`))) { 
       const imagesToPersist = generatedImages.slice(0, MAX_STORED_IMAGES);
       try {
-        localStorage.setItem('generatedImages', JSON.stringify(imagesToPersist));
+        localStorage.setItem(`generatedImages_${user.uid}`, JSON.stringify(imagesToPersist));
+        if (!localStorage.getItem(`generatedImagesInitialLoadAttempted_${user.uid}`)) {
+           localStorage.setItem(`generatedImagesInitialLoadAttempted_${user.uid}`, 'true');
+        }
       } catch (error) {
         console.error("Error saving images to local storage:", error);
         if (error instanceof DOMException && (error.name === 'QuotaExceededError' || error.code === 22 || (error.message && error.message.toLowerCase().includes('quota')))) {
@@ -77,9 +90,9 @@ export default function ImaginariumPage() {
           });
           try {
             if (imagesToPersist.length > 0) {
-              localStorage.setItem('generatedImages', JSON.stringify([imagesToPersist[0]]));
+              localStorage.setItem(`generatedImages_${user.uid}`, JSON.stringify([imagesToPersist[0]]));
             } else {
-              localStorage.removeItem('generatedImages');
+              localStorage.removeItem(`generatedImages_${user.uid}`);
             }
           } catch (fallbackError) {
             console.error("Failed to save even the single latest image after quota error:", fallbackError);
@@ -98,7 +111,7 @@ export default function ImaginariumPage() {
         }
       }
     }
-  }, [generatedImages, toast]);
+  }, [generatedImages, toast, user]);
 
   const handlePromptInputChange = (newPrompt: string) => {
     setPrompt(newPrompt);
@@ -204,10 +217,11 @@ export default function ImaginariumPage() {
         img.id === id ? { ...img, name: newName } : img
       )
     );
-    // Toast for renaming is now handled in ImageCard if successful, or here if a general status is needed.
-    // For now, let ImageCard handle success toast as it's closer to the user action.
   };
 
+  if (authLoading || !user) {
+    return <LoadingSpinner text="Authenticating..." />;
+  }
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
@@ -250,7 +264,7 @@ export default function ImaginariumPage() {
         </div>
       </main>
       <footer className="text-center py-6 text-sm text-muted-foreground">
-        <p>&copy; {new Date().getFullYear()} Imaginarium. All rights reserved.</p>
+        <p>&copy; {new Date().getFullYear()} Imaginarium. All rights reserved. User: {user?.email || user?.displayName}</p>
       </footer>
     </div>
   );
