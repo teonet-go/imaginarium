@@ -144,7 +144,7 @@ export default function LoginPage() {
               <Input
                 id="password"
                 type="password"
-                placeholder="•••••••• (at least 6 characters for sign up)"
+                placeholder="(at least 6 characters for sign up)"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
